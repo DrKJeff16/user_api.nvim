@@ -4,12 +4,15 @@
 
 local ERROR = vim.log.levels.ERROR
 
-_G.inspect = vim.inspect
-
-_G.MYVIMRC = vim.fn.stdpath('config') .. '/init.lua'
-
 ---@type UserAPI
 local User = {}
+
+User.paths = {}
+User.FAILED = {}
+
+User.config = {}
+
+User.config.keymaps = require('user_api.config.keymaps')
 
 ---@type User.Check
 User.check = require('user_api.check')
@@ -38,6 +41,15 @@ User.util = require('user_api.util')
 ---@type string[]
 User.registered_plugins = {}
 
+-- TODO: This needs to be fixed
+---@param t number
+function User.sleep(t)
+    local sec = tonumber(os.clock() + t)
+
+    while os.clock() < sec do
+    end
+end
+
 ---@param self UserAPI
 ---@param pathstr string
 ---@param index? integer
@@ -49,8 +61,9 @@ function User:register_plugin(pathstr, index)
     local is_int = Value.is_int
     local type_not_empty = Value.type_not_empty
     local tbl_contains = vim.tbl_contains
+    local in_tbl_range = Value.in_tbl_range
 
-    index = (is_int(index) and index >= 1 and index <= #self.registered_plugins) and index or 0
+    index = (is_int(index) and in_tbl_range(index, self.registered_plugins)) and index or 0
 
     if not type_not_empty('string', pathstr) then
         error('(user_api:register_plugin): Plugin must be a non-empty string', ERROR)
@@ -112,24 +125,25 @@ function User:register_plugin(pathstr, index)
 end
 
 ---@param self UserAPI
----@return string[]|table failed
+---@return boolean
+---@return string[]|table
 function User:reload_plugins()
     local exists = self.check.exists.module
 
-    ---@type string[]
-    local failed = {}
+    self.FAILED = {}
+
+    local noerr = true
+
     for _, plugin in next, self.registered_plugins do
-        if not exists(plugin) then
-            table.insert(failed, plugin)
-            goto continue
+        if exists(plugin) then
+            require(plugin)
+        else
+            table.insert(self.FAILED, plugin)
+            noerr = false
         end
-
-        require(plugin)
-
-        ::continue::
     end
 
-    return failed
+    return noerr, self.FAILED
 end
 
 ---@param self UserAPI
@@ -145,11 +159,74 @@ function User:print_loaded_plugins()
 end
 
 ---@param self UserAPI
+function User:plugin_maps()
+    local Keymaps = require('user_api.config.keymaps')
+
+    local desc = self.maps.kmap.desc
+    local type_not_empty = self.check.value.type_not_empty
+    local displace_letter = self.util.displace_letter
+    local replace = self.util.string.replace
+
+    if not type_not_empty('table', self.registered_plugins) then
+        return
+    end
+
+    self.paths = {}
+
+    for _, v in next, self.registered_plugins do
+        local fpath = vim.fn.stdpath('config') .. '/lua/plugin'
+        if v:sub(1, 7) == 'plugin.' then
+            v = fpath .. replace(v:sub(7), '.', '/')
+
+            if vim.fn.isdirectory(v) == 1 then
+                v = v .. '/init.lua'
+            else
+                v = v .. '.lua'
+            end
+
+            table.insert(self.paths, v)
+        end
+    end
+
+    ---@type AllMaps
+    local Keys = {}
+
+    local group = 'A'
+    local i = 1
+    local cycle = 1
+
+    while i < #self.paths do
+        Keys['<leader>UP' .. group] = {
+            group = '+Group ' .. group,
+        }
+
+        local name = self.paths[i]
+
+        Keys['<leader>UP' .. group .. tostring(cycle)] = {
+            function()
+                vim.cmd.tabnew(name)
+            end,
+            desc(name),
+        }
+
+        if cycle == 9 then
+            group = displace_letter(group, 'next', false)
+            cycle = 1
+        elseif cycle < 9 then
+            cycle = cycle + 1
+        end
+
+        i = i + 1
+    end
+
+    Keymaps({ n = Keys })
+end
+
+---@param self UserAPI
 function User:setup_keys()
     local desc = self.maps.kmap.desc
     local notify = self.util.notify.notify
     local insp = inspect or vim.inspect
-    local type_not_empty = self.check.value.type_not_empty
 
     ---@type AllMaps
     local Keys = {
@@ -158,16 +235,17 @@ function User:setup_keys()
 
         ['<leader>UPr'] = {
             function()
-                notify('Reloading...', 'debug', {
+                notify('Reloading...', 'info', {
                     hide_from_history = true,
                     title = 'User API',
                     timeout = 1000,
                     animate = true,
                 })
-                local res = self:reload_plugins()
 
-                if type_not_empty('table', res) then
-                    notify(insp(res), 'error', {
+                local res, failed = self:reload_plugins()
+
+                if not res then
+                    notify(insp(failed), 'error', {
                         hide_from_history = false,
                         timeout = 2250,
                         title = '[User API]: PLUGINS FAILED TO RELOAD',
@@ -195,8 +273,9 @@ function User:setup_keys()
     }
 
     local Keymaps = require('user_api.config.keymaps')
-    Keymaps:setup({ n = Keys })
+    Keymaps({ n = Keys })
 
+    self:plugin_maps()
     self.update:setup_maps()
     self.commands:setup_keys()
     self.opts:setup_keys()

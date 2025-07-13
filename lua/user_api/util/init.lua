@@ -9,11 +9,18 @@ local in_tbl = vim.tbl_contains
 
 local ERROR = vim.log.levels.ERROR
 
+local augroup = vim.api.nvim_create_augroup
+
 ---@type User.Util
 local Util = {}
 
+---@type User.Util.Notify
 Util.notify = require('user_api.util.notify')
+
+---@type User.Util.Autocmd
 Util.au = require('user_api.util.autocmd')
+
+---@type User.Util.String
 Util.string = require('user_api.util.string')
 
 ---@return boolean
@@ -23,20 +30,19 @@ function Util.has_words_before()
     local curr_win = vim.api.nvim_get_current_win
 
     unpack = unpack or table.unpack
+
     local line, col = unpack(win_cursor(curr_win()))
     return col ~= 0 and buf_lines(0, line - 1, line, true)[1]:sub(col, col):match('%s') == nil
 end
 
----@param self User.Util
 ---@param s string|string[]
 ---@param bufnr? integer
 ---@return table<string, any>|table
-function Util:opt_get(s, bufnr)
+function Util.get_opts_tbl(s, bufnr)
     local Value = require('user_api.check.value')
 
     local is_int = Value.is_int
     local type_not_empty = Value.type_not_empty
-    local single_type_tbl = Value.single_type_tbl
 
     bufnr = is_int(bufnr) and bufnr or curr_buf()
 
@@ -47,24 +53,13 @@ function Util:opt_get(s, bufnr)
         res[s] = optget(s, { buf = bufnr })
     end
 
-    if type_not_empty('table', s) and single_type_tbl('string', s) then
+    if type_not_empty('table', s) then
         for _, opt in next, s do
-            res[opt] = self:opt_get(opt, bufnr)
+            res[opt] = Util.get_opts_tbl(opt, bufnr)
         end
     end
 
     return res
-end
-
----@param s string
----@param val any
----@param bufnr? integer
-function Util.opt_set(s, val, bufnr)
-    local is_int = require('user_api.check.value').is_int
-
-    bufnr = is_int(bufnr) and bufnr or curr_buf()
-
-    optset(s, val, { buf = bufnr })
 end
 
 ---@param T table<string|integer, any>
@@ -72,13 +67,9 @@ end
 ---@param direction? 'l'|'r'
 ---@return table<string|integer, any> res
 function Util.mv_tbl_values(T, steps, direction)
-    local Value = require('user_api.check.value')
-
-    local is_int = Value.is_int
-    local type_not_empty = Value.type_not_empty
     local notify = Util.notify.notify
 
-    if not type_not_empty('table', T) then
+    if T == nil or type(T) ~= 'table' then
         notify("Input isn't a table, or it is empty", ERROR, {
             title = '(user_api.util.mv_tbl_values)',
             animate = true,
@@ -87,10 +78,8 @@ function Util.mv_tbl_values(T, steps, direction)
         })
     end
 
-    steps = (is_int(steps) and steps > 0) and steps or 1
-    direction = (type_not_empty('string', direction) and in_tbl({ 'l', 'r' }, direction))
-            and direction
-        or 'r'
+    steps = steps > 0 and steps or 1
+    direction = (direction ~= nil and in_tbl({ 'l', 'r' }, direction)) and direction or 'r'
 
     ---@type DirectionFuns
     local direction_funcs = {
@@ -100,14 +89,14 @@ function Util.mv_tbl_values(T, steps, direction)
             ---@type (string|integer)[]
             local keys = vim.tbl_keys(t)
             table.sort(keys)
-            local n_keys = #keys
+            local len = #keys
 
             ---@type table<string|integer, any>
             local res = {}
 
             for i, v in next, keys do
                 if i == 1 then
-                    res[v] = t[keys[n_keys]]
+                    res[v] = t[keys[len]]
                 else
                     res[v] = t[keys[i - 1]]
                 end
@@ -121,15 +110,15 @@ function Util.mv_tbl_values(T, steps, direction)
             ---@type (string|integer)[]
             local keys = vim.tbl_keys(t)
             table.sort(keys)
-            local n_keys = #keys
+            local len = #keys
 
             ---@type table<string|integer, any>
             local res = {}
 
             for i, v in next, keys do
-                if i == n_keys then
+                if i == len then
                     res[v] = t[keys[1]]
-                elseif i < n_keys and i > 0 then
+                elseif i < len and i > 0 then
                     res[v] = t[keys[i + 1]]
                 end
             end
@@ -158,13 +147,14 @@ function Util.xor(x, y)
     local Value = require('user_api.check.value')
 
     local is_bool = Value.is_bool
+    local notify = Util.notify.notify
 
     if not is_bool({ x, y }, true) then
-        Util.notify.notify('An argument is not of boolean type', 'error', {
-            hide_from_history = false,
-            timeout = 2250,
+        notify('An argument is not of boolean type', 'error', {
             title = '(user_api.util.xor)',
             animate = true,
+            timeout = 2250,
+            hide_from_history = false,
         })
         return false
     end
@@ -174,7 +164,7 @@ end
 
 ---@param T table<string|integer, any>
 ---@param fields string|integer|(string|integer)[]
----@return table<string|integer, any> res
+---@return table<string|integer, any>
 function Util.strip_fields(T, fields)
     local Value = require('user_api.check.value')
 
@@ -275,7 +265,7 @@ function Util.ft_set(s, bufnr)
     bufnr = is_int(bufnr) and bufnr or curr_buf()
 
     return function()
-        Util.opt_set('ft', s, bufnr)
+        optset('ft', s, { buf = bufnr })
     end
 end
 
@@ -321,90 +311,124 @@ function Util.pop_values(T, V)
     return T, val
 end
 
-function Util:assoc()
+---@param self User.Util
+function Util:setup_autocmd()
     local au_repeated_events = self.au.au_repeated_events
+    local ft_set = self.ft_set
 
-    local group = vim.api.nvim_create_augroup('UserAssocs', { clear = false })
+    local group = augroup('User.AU', { clear = true })
 
     ---@type AuRepeatEvents[]
     local AUS = {
         { -- NOTE: Keep this as first element for `orgmode` addition
-            events = { 'BufNewFile', 'BufReadPre' },
+            events = { 'BufNewFile', 'BufWinEnter', 'BufEnter' },
             opts_tbl = {
-                { pattern = '.spacemacs', callback = self.ft_set('lisp'), group = group },
-                { pattern = '.clangd', callback = self.ft_set('yaml'), group = group },
-                { pattern = '*.norg', callback = self.ft_set('norg'), group = group },
+                {
+                    group = group,
+                    pattern = '.spacemacs',
+                    callback = function(ev)
+                        ft_set('lisp', ev.buf)()
+                    end,
+                },
+                {
+                    group = group,
+                    pattern = '*.el',
+                    callback = function(ev)
+                        ft_set('lisp', ev.buf)()
+                    end,
+                },
+                {
+                    group = group,
+                    pattern = '.clangd',
+                    callback = function(ev)
+                        ft_set('yaml', ev.buf)()
+                    end,
+                },
+                {
+                    group = group,
+                    pattern = '*.norg',
+                    callback = function(ev)
+                        ft_set('norg', ev.buf)()
+                    end,
+                },
             },
         },
         {
-            events = { 'BufEnter', 'WinEnter', 'FileType' },
+            events = { 'BufEnter', 'WinEnter', 'BufWinEnter' },
             opts_tbl = {
                 {
                     group = group,
-                    callback = function()
-                        local bufnr = curr_buf()
-                        if not (self.ft_get(bufnr) == 'help' and self.bt_get(bufnr) == 'help') then
-                            return
-                        end
-
-                        vim.schedule(function()
-                            vim.api.nvim_set_option_value('signcolumn', 'no', { scope = 'local' })
-                            vim.cmd.wincmd('=')
-                            vim.cmd.noh()
-                        end)
-                    end,
-                },
-                {
-                    pattern = 'lua',
-                    group = group,
-                    callback = function()
-                        local executable = require('user_api.check.exists').executable
-                        local buf = curr_buf()
-
-                        -- Make sure the buffer is modifiable
-                        if
-                            not (optget('modifiable', { scope = 'local' }) and executable('stylua'))
-                        then
-                            self.notify.notify('No stylua???')
-                            return
-                        end
-
+                    callback = function(args)
                         local Keymaps = require('user_api.config.keymaps')
+                        local executable = require('user_api.check.exists').executable
                         local desc = require('user_api.maps.kmap').desc
 
-                        Keymaps:setup({
-                            n = {
-                                ['<leader><C-l>'] = {
-                                    ':silent !stylua %<CR>',
-                                    desc('Format With `stylua`', true, buf),
-                                },
-                            },
-                        })
-                    end,
-                },
-                {
-                    pattern = 'python',
-                    group = group,
-                    callback = function()
-                        local executable = require('user_api.check.exists').executable
-                        local buf = curr_buf()
+                        local buf = args.buf
 
-                        -- Make sure the buffer is modifiable
-                        if not (optget('modifiable', { buf = buf }) and executable('isort')) then
+                        local bt = self.bt_get(buf)
+                        local ft = self.ft_get(buf)
+
+                        if ft == 'lazy' then
+                            vim.schedule(function()
+                                optset('signcolumn', 'no', { scope = 'local' })
+                                optset('number', false, { scope = 'local' })
+                            end)
+
                             return
                         end
 
-                        local Keymaps = require('user_api.config.keymaps')
-                        local desc = require('user_api.maps.kmap').desc
+                        if bt == 'help' or ft == 'help' then
+                            vim.schedule(function()
+                                optset('signcolumn', 'no', { scope = 'local' })
+                                vim.cmd.wincmd('=')
+                                vim.cmd.noh()
+                            end)
 
-                        Keymaps:setup({
-                            n = {
-                                ['<leader><C-l>'] = {
-                                    ':silent !isort %<CR>',
-                                    desc('Format With `isort`', true, buf),
+                            return
+                        end
+
+                        if ft == 'lua' then
+                            -- Make sure the buffer is modifiable
+                            if not executable('stylua') then
+                                self.notify.notify('No stylua???', 'warn')
+                                return
+                            end
+
+                            if not optget('modifiable', { scope = 'local' }) then
+                                return
+                            end
+
+                            Keymaps({
+                                n = {
+                                    ['<leader><C-l>'] = {
+                                        ':silent !stylua %<CR>',
+                                        desc('Format With `stylua`'),
+                                    },
                                 },
-                            },
-                        })
+                            }, buf)
+
+                            return
+                        end
+
+                        if ft == 'python' then
+                            -- Make sure the buffer is modifiable
+                            if
+                                not (optget('modifiable', { buf = buf }) and executable('isort'))
+                            then
+                                return
+                            end
+
+                            Keymaps({
+                                n = {
+                                    ['<leader><C-l>'] = {
+                                        ':silent !isort %<CR>',
+                                        desc('Format With `isort`'),
+                                    },
+                                },
+                            }, buf)
+
+                            return
+                        end
                     end,
                 },
             },
@@ -417,12 +441,16 @@ function Util:assoc()
         table.insert(AUS[1].opts_tbl, {
             group = group,
             pattern = '*.org',
-            callback = self.ft_set('org'),
+            callback = function(ev)
+                self.ft_set('org', ev.buf)()
+            end,
         })
     end
 
-    for _, T in next, AUS do
-        au_repeated_events(T)
+    self.au.created = vim.tbl_deep_extend('keep', self.au.created or {}, AUS)
+
+    for _, t in next, self.au.created do
+        au_repeated_events(t)
     end
 end
 
@@ -447,8 +475,8 @@ function Util.displace_letter(c, direction, cycle)
         return 'a'
     end
 
-    local LOWER = vim.deepcopy(A.lower_map)
-    local UPPER = vim.deepcopy(A.upper_map)
+    -- NOTE: Copy the tables from the alphabet field
+    local LOWER, UPPER = vim.deepcopy(A.lower_map), vim.deepcopy(A.upper_map)
 
     ---@type string
     local res = ''
@@ -511,12 +539,32 @@ function Util.discard_dups(data)
     res = {}
 
     for k, v in next, data do
-        if not vim.tbl_contains(res, v) then
+        if not in_tbl(res, v) then
             res[k] = v
         end
     end
 
     return res
+end
+
+---@param T table
+---@return table
+function Util.reverse_tbl(T)
+    local Value = require('user_api.check.value')
+
+    local type_not_empty = Value.type_not_empty
+
+    if not type_not_empty('table', T) then
+        error('(user_api.util.reverse_tbl): Empty or non-existant table', ERROR)
+    end
+
+    local len = #T
+
+    for i = 1, math.floor(len / 2), 1 do
+        T[i], T[len - i + 1] = T[len - i + 1], T[i]
+    end
+
+    return T
 end
 
 ---@param O? table

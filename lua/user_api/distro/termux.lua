@@ -17,12 +17,12 @@ Termux.PREFIX = vim.fn.has_key(environ(), 'PREFIX') and environ()['PREFIX'] or '
 _G.PREFIX = Termux.PREFIX
 
 Termux.rtpaths = {
-    string.format('%s/local/share/nvim/runtime', PREFIX),
-    string.format('%s/share/nvim/runtime', PREFIX),
-    string.format('%s/local/share/vim/vimfiles', PREFIX),
-    string.format('%s/local/share/vim/vimfiles/after', PREFIX),
-    string.format('%s/share/vim/vimfiles', PREFIX),
     string.format('%s/share/vim/vimfiles/after', PREFIX),
+    string.format('%s/share/vim/vimfiles', PREFIX),
+    string.format('%s/share/nvim/runtime', PREFIX),
+    string.format('%s/local/share/vim/vimfiles/after', PREFIX),
+    string.format('%s/local/share/vim/vimfiles', PREFIX),
+    string.format('%s/local/share/nvim/runtime', PREFIX),
 }
 
 ---@param self User.Distro.Termux
@@ -47,7 +47,7 @@ function Termux:validate()
         return false
     end
 
-    self.rtpaths = vim.tbl_deep_extend('force', {}, new_rtpaths)
+    self.rtpaths = vim.deepcopy(new_rtpaths)
     return true
 end
 
@@ -57,29 +57,12 @@ function Termux:setup()
         return
     end
 
-    local Check = require('user_api.check')
-    local Util = require('user_api.util')
-
-    local is_dir = Check.exists.vim_isdir
-    local empty = Check.value.empty
-    local strip_values = Util.strip_values
-
     if not is_dir(PREFIX) then
         return
     end
 
-    ---@type table
-    ---@diagnostic disable-next-line
-    local rtp = vim.opt.rtp:get()
-
     for _, path in next, vim.deepcopy(self.rtpaths) do
-        if not (is_dir(path) or vim.tbl_contains(rtp, path)) then
-            self.rtpaths = strip_values(self.rtpaths, { path })
-        end
-    end
-
-    if not empty(self.rtpaths) then
-        for _, path in next, self.rtpaths do
+        if is_dir(path) and not vim.tbl_contains(vim.opt.rtp:get(), path) then ---@diagnostic disable-line
             vim.opt.rtp:append(path)
         end
     end

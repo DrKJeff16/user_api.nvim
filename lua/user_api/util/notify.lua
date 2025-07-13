@@ -3,16 +3,14 @@
 
 ---@module 'user_api.types.util'
 
-local Lvl = vim.log.levels
+local TRACE = vim.log.levels.TRACE -- `0`
+local DEBUG = vim.log.levels.DEBUG -- `1`
+local INFO = vim.log.levels.INFO -- `2`
+local WARN = vim.log.levels.WARN -- `3`
+local ERROR = vim.log.levels.ERROR -- `4`
+local OFF = vim.log.levels.OFF -- `5`
 
-local TRACE = Lvl.TRACE
-local DEBUG = Lvl.DEBUG
-local INFO = Lvl.INFO
-local WARN = Lvl.WARN
-local ERROR = Lvl.ERROR
-local OFF = Lvl.OFF
-
---- Can't use `check.exists.module()` here as said module might
+--- Can't use `user_api.check.exists.module()` here as said module might
 --- end up requiring this module, so let's avoid an import loop,
 --- shall we?
 ---@param mod string The module `require()` string
@@ -47,12 +45,12 @@ Notify.Levels = {
     [WARN] = 'warn',
     [ERROR] = 'error',
     [OFF] = 'off',
-    TRACE = 0,
-    DEBUG = 1,
-    INFO = 2,
-    WARN = 3,
-    ERROR = 4,
-    OFF = 5,
+    TRACE = TRACE,
+    DEBUG = DEBUG,
+    INFO = INFO,
+    WARN = WARN,
+    ERROR = ERROR,
+    OFF = OFF,
 }
 
 ---@param msg string
@@ -61,7 +59,8 @@ Notify.Levels = {
 function Notify.notify(msg, lvl, opts)
     if type(msg) ~= 'string' then
         error('(user_api.util.notify.notify): Message is not a string')
-    elseif msg == '' then
+    end
+    if msg == '' then
         error('(user_api.util.notify.notify): Empty message')
     end
 
@@ -119,6 +118,50 @@ function _G.insp_anotify(msg, lvl, opts)
 
     require('plenary.async').run(func)
 end
+
+---@param lvl VimNotifyLvl
+---@return fun(args: vim.api.keyset.create_user_command.command_args)
+local function gen_cmd_lvl(lvl)
+    ---@param args vim.api.keyset.create_user_command.command_args)
+    return function(args)
+        local notify = Notify.notify
+        local data = args.args
+
+        if data == '' then
+            return
+        end
+
+        local opts = {
+            animate = true,
+            title = 'Message',
+            timeout = 1750,
+            hide_from_history = args.bang,
+        }
+
+        notify(data, lvl, opts)
+    end
+end
+
+vim.api.nvim_create_user_command('Notify', gen_cmd_lvl(vim.log.levels.INFO), {
+    bang = true,
+    nargs = '+',
+    force = true,
+})
+vim.api.nvim_create_user_command('NotifyInfo', gen_cmd_lvl(vim.log.levels.INFO), {
+    bang = true,
+    nargs = '+',
+    force = true,
+})
+vim.api.nvim_create_user_command('NotifyWarn', gen_cmd_lvl(vim.log.levels.WARN), {
+    bang = true,
+    nargs = '+',
+    force = true,
+})
+vim.api.nvim_create_user_command('NotifyError', gen_cmd_lvl(vim.log.levels.ERROR), {
+    bang = true,
+    nargs = '+',
+    force = true,
+})
 
 return Notify
 

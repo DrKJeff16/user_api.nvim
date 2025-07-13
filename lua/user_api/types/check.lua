@@ -1,5 +1,7 @@
 ---@meta
 
+error('(user_api.types.check): DO NOT SOURCE THIS FILE DIRECTLY', vim.log.levels.ERROR)
+
 ---@alias Types
 ---|'nil'
 ---|'string'
@@ -18,6 +20,10 @@
 
 ---@alias ValueFunc fun(var: any, multiple: boolean?): boolean
 
+---@class EqTbl
+---@field low boolean
+---@field high boolean
+
 --- Exitstance checks
 --- ---
 --- ## Description
@@ -26,11 +32,11 @@
 --- Also, simplified Vim functions can be found here
 ---@class User.Check.Existance
 ---@field module fun(mod: string, return_mod: boolean?): boolean|unknown|nil
----@field modules fun(mod: string|string[], need_all: boolean?): boolean|table<string, boolean>
----@field executable fun(exe: string|string[], fallback: fun()?): boolean
----@field env_vars fun(vars: string|string[], fallback: fun()?): boolean
----@field vim_exists fun(expr: string|string[]): boolean
----@field vim_has fun(expr: string|string[]): boolean
+---@field modules fun(mod: string[]|string, need_all: boolean?): boolean|table<string, boolean>
+---@field executable fun(exe: string[]|string, fallback: fun()?): boolean
+---@field env_vars fun(vars: string[]|string, fallback: fun()?): boolean
+---@field vim_exists fun(expr: string[]|string): boolean
+---@field vim_has fun(expr: string[]|string): boolean
 ---@field vim_isdir fun(path: string): boolean
 
 --- Checks whether a value is `nil`, i.e. non existant or explicitly set as nil
@@ -176,11 +182,15 @@
 ---
 --- A boolean indicatin whether input data is empty or not.
 --- ---
----@field empty fun(v: string|table|number|integer|(string|table|number|integer)[], multiple: boolean?): boolean
+---@field empty fun(v: string|table|number|(string|table|number)[], multiple: boolean?): boolean
 ---@field fields fun(fields: string|integer|(string|integer)[], T: table<string|integer, any>): boolean
 ---@field tbl_values fun(values: any[], T: table, return_keys: boolean?):((string|integer)[]|boolean|string|integer)
 ---@field single_type_tbl fun(type_str: Types, T: table): boolean
 ---@field type_not_empty fun(type_str: EmptyTypes, data: table|string|number): boolean
+--- Checks whether a certain `num` does not exceed table index range
+--- i.e. `num >= 1 and num <= #T`
+---@field in_tbl_range fun(num: integer, T: table): boolean
+---@field num_range fun(num: number, low: number, high: number, eq: EqTbl?): boolean
 
 ---@class User.Check
 ---@field exists User.Check.Existance

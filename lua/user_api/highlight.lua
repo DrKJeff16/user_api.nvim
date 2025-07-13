@@ -1,6 +1,8 @@
 ---@diagnostic disable:missing-fields
 
 ---@module 'user_api.types.highlight'
+---@module 'user_api.types.check'
+---@module 'user_api.types.util'
 
 local ERROR = vim.log.levels.ERROR
 
@@ -22,7 +24,6 @@ function Hl.hl(name, opts, bufnr)
     if not (is_str(name) and is_tbl(opts)) or empty(name) then
         notify('Bad arguments', ERROR, {
             title = '(user_api.highlight.hl)',
-            animate = true,
         })
         return
     end

@@ -1,5 +1,7 @@
 ---@meta
 
+error('(user_api.types.which_key): DO NOT SOURCE THIS FILE DIRECTLY', vim.log.levels.ERROR)
+
 ---@module 'which-key'
 
 -- The Vim modes used for `which-key` as a `string`
@@ -37,6 +39,10 @@
 ---@field hidden? boolean
 --- Any of the Vim modes: `'n'|'i'|'v'|'t'|'o'|'x'`
 ---@field mode? RegModes
+---@field cond? boolean|fun(): boolean
+---@field icon? string|wk.Icon|fun(): (wk.Icon|string)
+---@field proxy? string
+---@field expand? fun(): wk.Spec
 
 --- A **group mapping scheme** for usage related to `which-key`
 --- ---
@@ -80,8 +86,6 @@
 ---@see User.Maps.WK
 ---@class RegPfx: vim.keymap.set.Opts
 ---@field group string
----@field hidden? boolean
----@field mode? MapModes
 
 --- A dictionary of string ==> `RegKey` class
 --- ---

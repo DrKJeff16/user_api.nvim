@@ -1,5 +1,7 @@
 ---@meta
 
+error('(user_api.types.util): DO NOT SOURCE THIS FILE DIRECTLY', vim.log.levels.ERROR)
+
 ---@module 'user_api.types.autocmd'
 
 ---@alias VimNotifyLvl
@@ -50,20 +52,134 @@
 ---@field notify fun(msg: string, lvl: (NotifyLvl|VimNotifyLvl)?, opts: table|notify.Options?)
 
 ---@class User.Util.String.Alphabet.Vowels
+---@field upper_list { [1]: 'A', [2]: 'E', [3]: 'I', [4]: 'O', [5]: 'U' }
+---@field lower_list { [1]: 'a', [2]: 'e', [3]: 'i', [4]: 'o', [5]: 'u' }
 ---@field upper_map { ['A']: 'A', ['E']: 'E', ['I']: 'I', ['O']: 'O', ['U']: 'U' }
 ---@field lower_map { ['a']: 'a', ['e']: 'e', ['i']: 'i', ['o']: 'o', ['u']: 'u' }
 
+---@class User.Util.String.Alphabet.UpperMap
+---@field A 'A'
+---@field B 'B'
+---@field C 'C'
+---@field D 'D'
+---@field E 'E'
+---@field F 'F'
+---@field G 'G'
+---@field H 'H'
+---@field I 'I'
+---@field J 'J'
+---@field K 'K'
+---@field L 'L'
+---@field M 'M'
+---@field N 'N'
+---@field O 'O'
+---@field P 'P'
+---@field Q 'Q'
+---@field R 'R'
+---@field S 'S'
+---@field T 'T'
+---@field U 'U'
+---@field V 'V'
+---@field W 'W'
+---@field X 'X'
+---@field Y 'Y'
+---@field Z 'Z'
+
+---@class User.Util.String.Alphabet.UpperList
+---@field [1] 'A'
+---@field [2] 'B'
+---@field [3] 'C'
+---@field [4] 'D'
+---@field [5] 'E'
+---@field [6] 'F'
+---@field [7] 'G'
+---@field [8] 'H'
+---@field [9] 'I'
+---@field [10] 'J'
+---@field [11] 'K'
+---@field [12] 'L'
+---@field [13] 'M'
+---@field [14] 'N'
+---@field [15] 'O'
+---@field [16] 'P'
+---@field [17] 'Q'
+---@field [18] 'R'
+---@field [19] 'S'
+---@field [20] 'T'
+---@field [21] 'U'
+---@field [22] 'V'
+---@field [23] 'W'
+---@field [24] 'X'
+---@field [25] 'Y'
+---@field [26] 'Z'
+
+---@class User.Util.String.Alphabet.LowerList
+---@field [1] 'a'
+---@field [2] 'b'
+---@field [3] 'c'
+---@field [4] 'd'
+---@field [5] 'e'
+---@field [6] 'f'
+---@field [7] 'g'
+---@field [8] 'h'
+---@field [9] 'i'
+---@field [10] 'j'
+---@field [11] 'k'
+---@field [12] 'l'
+---@field [13] 'm'
+---@field [14] 'n'
+---@field [15] 'o'
+---@field [16] 'p'
+---@field [17] 'q'
+---@field [18] 'r'
+---@field [19] 's'
+---@field [20] 't'
+---@field [21] 'u'
+---@field [22] 'v'
+---@field [23] 'w'
+---@field [24] 'x'
+---@field [25] 'y'
+---@field [26] 'z'
+
+---@class User.Util.String.Alphabet.LowerMap
+---@field a 'a'
+---@field b 'b'
+---@field c 'c'
+---@field d 'd'
+---@field e 'e'
+---@field f 'f'
+---@field g 'g'
+---@field h 'h'
+---@field i 'i'
+---@field j 'j'
+---@field k 'k'
+---@field l 'l'
+---@field m 'm'
+---@field n 'n'
+---@field o 'o'
+---@field p 'p'
+---@field q 'q'
+---@field r 'r'
+---@field s 's'
+---@field t 't'
+---@field u 'u'
+---@field v 'v'
+---@field w 'w'
+---@field x 'x'
+---@field y 'y'
+---@field z 'z'
+
 ---@class User.Util.String.Alphabet
----@field upper_list string[]
----@field lower_list string[]
----@field upper_map table<string, string>
----@field lower_map table<string, string>
+---@field upper_list User.Util.String.Alphabet.UpperList
+---@field lower_list User.Util.String.Alphabet.LowerList
+---@field upper_map User.Util.String.Alphabet.UpperMap
+---@field lower_map User.Util.String.Alphabet.LowerMap
 ---@field vowels User.Util.String.Alphabet.Vowels
 
 ---@class User.Util.String.Digits
----@field all table<string, string>
----@field odd_list ('1'|'3'|'5'|'7'|'9')[]
----@field even_list ('0'|'2'|'4'|'6'|'8')[]
+---@field all { ['0']: '0', ['1']: '1', ['2']: '2', ['3']: '3', ['4']: '4', ['5']: '5', ['6']: '6', ['7']: '7', ['8']: '8', ['9']: '9' }
+---@field odd_list { [1]: '1', [2]: '3', [3]: '5', [4]: '7', [5]: '9' }
+---@field even_list { [1]: '0', [2]: '2', [3]: '4', [4]: '6', [5]: '8' }
 ---@field odd_map { ['1']: '1', ['3']: '3', ['5']: '5', ['7']: '7', ['9']: '9' }
 ---@field even_map { ['0']: '0', ['2']: '2', ['4']: '4', ['6']: '6', ['8']: '8' }
 
@@ -71,6 +187,7 @@
 ---@field alphabet User.Util.String.Alphabet
 ---@field digits User.Util.String.Digits
 ---@field capitalize fun(s: string, use_dot: boolean?, triggers: string[]?): (new_str: string)
+---@field replace fun(str: string, target: string, new: string): string
 
 ---@class User.Util.Autocmd
 ---@field au_pair fun(T: AuPair)
@@ -78,6 +195,7 @@
 ---@field au_from_arr fun(T: AuList)
 ---@field au_from_dict fun(T: AuDict)
 ---@field au_repeated_events fun(T: AuRepeatEvents)
+---@field created? table|AuRepeatEvents[]
 
 ---@alias DirectionFun fun(t: table<string|integer, any>): res: table<string|integer, any>
 
@@ -90,18 +208,18 @@
 ---@field au User.Util.Autocmd
 ---@field string User.Util.String
 ---@field has_words_before fun(): boolean
----@field pop_values fun(T: table, V: any): (table, ...)
+---@field pop_values fun(T: table, V: any): table,...
 ---@field xor fun(x: boolean, y: boolean): boolean
----@field strip_fields fun(T: table<string|integer, any>, values: string|string[]): table
+---@field strip_fields fun(T: table<string|integer, any>, values: string[]|string): table<string|integer, any>
 ---@field strip_values fun(T: table<string|integer, any>, values: any[], max_instances: integer?): table
 ---@field ft_set fun(s: string?, bufnr: integer?): fun()
 ---@field bt_get fun(bufnr: integer?): string
 ---@field ft_get fun(bufnr: integer?): string
----@field opt_get fun(self: User.Util, s: string|string[], bufnr: integer?): table<string, any>|table
----@field opt_set fun(s: string, val: any, bufnr: integer?)
----@field assoc fun(self: User.Util)
+---@field get_opts_tbl fun(s: string[]|string, bufnr: integer?): table<string, any>|table
+---@field setup_autocmd fun(self: User.Util)
 ---@field displace_letter fun(c: string, direction: ('next'|'prev')?, cycle: boolean?): string
----@field mv_tbl_values fun(T: table|table<string|integer, any>, steps: integer?, direction: ('r'|'l')?): res: table<string|integer, any>
+---@field mv_tbl_values fun(T: table<string|integer, any>|table, steps: integer?, direction: ('r'|'l')?): res: table<string|integer, any>
+---@field reverse_tbl fun(T: table): table
 ---@field discard_dups fun(data: string|table): (string|table)
 ---@field new fun(O: table?): table|User.Util
 

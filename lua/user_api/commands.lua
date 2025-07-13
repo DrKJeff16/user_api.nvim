@@ -2,10 +2,6 @@
 
 ---@module 'user_api.types.commands'
 
-_G.newline = string.char(10)
-
-local WARN = vim.log.levels.WARN
-
 local Value = require('user_api.check.value')
 
 local desc = require('user_api.maps.kmap').desc
@@ -75,7 +71,7 @@ function Commands:setup()
         end
     end
 
-    vim.g.user_api_commands_setup = 1
+    vim.g.user_api_commans_setup = 1
 end
 
 ---@param self User.Commands
@@ -83,13 +79,9 @@ function Commands:setup_keys()
     local is_int = Value.is_int
     local is_tbl = Value.is_tbl
 
-    local abort = not (is_int(vim.g.user_api_commands_setup) and vim.g.user_api_commands_setup == 1)
+    local abort = not (is_int(vim.g.user_api_commans_setup) and vim.g.user_api_commans_setup == 1)
 
     if abort then
-        vim.notify(
-            '(user_api.commands:setup_keys): Aborted! `user_api.commands:setup()` not called yet?',
-            WARN
-        )
         return
     end
 
@@ -100,7 +92,7 @@ function Commands:setup_keys()
             goto continue
         end
 
-        Keymaps:setup(cmd.mappings)
+        Keymaps(cmd.mappings)
 
         ::continue::
     end
