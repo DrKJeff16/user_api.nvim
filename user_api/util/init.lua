@@ -29,9 +29,7 @@ function Util.has_words_before()
     local win_cursor = vim.api.nvim_win_get_cursor
     local curr_win = vim.api.nvim_get_current_win
 
-    unpack = unpack or table.unpack
-
-    local line, col = unpack(win_cursor(curr_win()))
+    local line, col = (unpack or table.unpack)(win_cursor(curr_win()))
     return col ~= 0 and buf_lines(0, line - 1, line, true)[1]:sub(col, col):match('%s') == nil
 end
 
@@ -321,7 +319,7 @@ function Util:setup_autocmd()
     ---@type AuRepeatEvents[]
     local AUS = {
         { -- NOTE: Keep this as first element for `orgmode` addition
-            events = { 'BufNewFile', 'BufWinEnter', 'BufEnter' },
+            events = { 'BufCreate', 'BufAdd', 'BufNew', 'BufNewFile', 'BufWinEnter', 'BufEnter' },
             opts_tbl = {
                 {
                     group = group,
@@ -349,6 +347,57 @@ function Util:setup_autocmd()
                     pattern = '*.norg',
                     callback = function(ev)
                         ft_set('norg', ev.buf)()
+                    end,
+                },
+                {
+                    group = group,
+                    pattern = { '*.c', '*.h' },
+                    callback = function(ev)
+                        ---@type vim.api.keyset.option
+                        local setopt_opts = { buf = ev.buf }
+                        local opt_dict = {
+                            tabstop = 2,
+                            shiftwidth = 2,
+                            softtabstop = 2,
+                            expandtab = true,
+                            autoindent = true,
+                            filetype = 'c',
+                        }
+
+                        for opt, val in next, opt_dict do
+                            optset(opt, val, setopt_opts)
+                        end
+                    end,
+                },
+                {
+                    group = group,
+                    pattern = {
+                        '*.C',
+                        '*.H',
+                        '*.c++',
+                        '*.cc',
+                        '*.cpp',
+                        '*.cxx',
+                        '*.h++',
+                        '*.hh',
+                        '*.hpp',
+                        '*.hxx',
+                    },
+                    callback = function(ev)
+                        ---@type vim.api.keyset.option
+                        local setopt_opts = { buf = ev.buf }
+                        local opt_dict = {
+                            tabstop = 2,
+                            shiftwidth = 2,
+                            softtabstop = 2,
+                            expandtab = true,
+                            autoindent = true,
+                            filetype = 'cpp',
+                        }
+
+                        for opt, val in next, opt_dict do
+                            optset(opt, val, setopt_opts)
+                        end
                     end,
                 },
             },
@@ -385,20 +434,34 @@ function Util:setup_autocmd()
                         end
 
                         if ft == 'lua' then
-                            -- Make sure the buffer is modifiable
-                            if not executable('stylua') then
-                                self.notify.notify('No stylua???', 'warn')
+                            if not optget('modifiable', { scope = 'local' }) then
                                 return
                             end
 
-                            if not optget('modifiable', { scope = 'local' }) then
+                            if not executable('stylua') then
                                 return
                             end
 
                             Keymaps({
                                 n = {
                                     ['<leader><C-l>'] = {
-                                        ':silent !stylua %<CR>',
+                                        function()
+                                            ---@diagnostic disable-next-line:param-type-mismatch
+                                            local ok, _ = pcall(vim.cmd, 'silent! !stylua %')
+
+                                            if ok then
+                                                self.notify.notify(
+                                                    'Formatted successfully!',
+                                                    'info',
+                                                    {
+                                                        title = 'StyLua',
+                                                        animate = true,
+                                                        timeout = 750,
+                                                        hide_from_history = true,
+                                                    }
+                                                )
+                                            end
+                                        end,
                                         desc('Format With `stylua`'),
                                     },
                                 },
@@ -418,7 +481,23 @@ function Util:setup_autocmd()
                             Keymaps({
                                 n = {
                                     ['<leader><C-l>'] = {
-                                        ':silent !isort %<CR>',
+                                        function()
+                                            ---@diagnostic disable-next-line:param-type-mismatch
+                                            local ok, _ = pcall(vim.cmd, 'silent! !isort %')
+
+                                            if ok then
+                                                self.notify.notify(
+                                                    'Formatted successfully!',
+                                                    'info',
+                                                    {
+                                                        title = 'isort',
+                                                        animate = true,
+                                                        timeout = 750,
+                                                        hide_from_history = true,
+                                                    }
+                                                )
+                                            end
+                                        end,
                                         desc('Format With `isort`'),
                                     },
                                 },
@@ -573,6 +652,6 @@ function Util.new(O)
     return setmetatable(O, { __index = Util })
 end
 
-return Util
+return Util.new()
 
 --- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:
