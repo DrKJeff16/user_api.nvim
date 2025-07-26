@@ -1,7 +1,19 @@
 ---@diagnostic disable:missing-fields
 
+---@module 'user_api.check'
+---@module 'user_api.commands'
+---@module 'user_api.config.keymaps'
+---@module 'user_api.config.neovide'
+---@module 'user_api.distro'
+---@module 'user_api.highlight'
+---@module 'user_api.maps'
+---@module 'user_api.opts'
+---@module 'user_api.update'
+---@module 'user_api.util'
+
 ---@class User.Config
 ---@field keymaps User.Config.Keymaps
+---@field neovide User.Config.Neovide
 
 ---@class UserAPI
 ---@field paths string[]|table
@@ -9,19 +21,19 @@
 ---@field check User.Check
 ---@field config User.Config
 ---@field commands User.Commands
----@field distro User.Distro|fun()
+---@field distro User.Distro|User.Distro.CallerFun
 ---@field highlight User.Hl
 ---@field maps User.Maps
----@field opts User.Opts|fun(override: table|vim.bo|vim.wo?, verbose: boolean?)
+---@field opts User.Opts|User.Opts.CallerFun
 ---@field update User.Update
 ---@field util User.Util
 ---@field registered_plugins string[]
----@field register_plugin fun(self: UserAPI, pathstr: string, index: integer?)
+---@field register_plugin fun(pathstr: string, index: integer?)
 ---@field reload_plugins fun(self: UserAPI): boolean,(string[]|table)
----@field setup_keys fun(self: UserAPI)
+---@field setup fun()
 ---@field plugin_maps fun(self: UserAPI)
 ---@field new fun(O: table?): table|UserAPI
----@field print_loaded_plugins fun(self: UserAPI)
+---@field print_loaded_plugins fun()
 ---@field sleep fun(t: number)
 
 local ERROR = vim.log.levels.ERROR
@@ -35,6 +47,8 @@ User.FAILED = {}
 User.config = {}
 
 User.config.keymaps = require('user_api.config.keymaps')
+
+User.config.neovide = require('user_api.config.neovide')
 
 ---@type User.Check
 User.check = require('user_api.check')
@@ -72,40 +86,39 @@ function User.sleep(t)
     end
 end
 
----@param self UserAPI
 ---@param pathstr string
 ---@param index? integer
-function User:register_plugin(pathstr, index)
-    local Value = self.check.value
+function User.register_plugin(pathstr, index)
+    local Value = User.check.value
 
-    local notify = self.util.notify.notify
+    local notify = User.util.notify.notify
     local is_nil = Value.is_nil
     local is_int = Value.is_int
     local type_not_empty = Value.type_not_empty
     local tbl_contains = vim.tbl_contains
     local in_tbl_range = Value.in_tbl_range
 
-    index = (is_int(index) and in_tbl_range(index, self.registered_plugins)) and index or 0
+    index = (is_int(index) and in_tbl_range(index, User.registered_plugins)) and index or 0
 
     if not type_not_empty('string', pathstr) then
         error('(user_api:register_plugin): Plugin must be a non-empty string', ERROR)
     end
 
-    if tbl_contains(self.registered_plugins, pathstr) then
+    if tbl_contains(User.registered_plugins, pathstr) then
         local old_idx = 0
-        for i, v in next, self.registered_plugins do
+        for i, v in next, User.registered_plugins do
             if v == pathstr then
                 old_idx = i
                 break
             end
         end
 
-        table.remove(self.registered_plugins, old_idx)
+        table.remove(User.registered_plugins, old_idx)
 
-        if tbl_contains({ 0, old_idx }, index) or index > #self.registered_plugins then
-            table.insert(self.registered_plugins, old_idx, pathstr)
+        if tbl_contains({ 0, old_idx }, index) or index > #User.registered_plugins then
+            table.insert(User.registered_plugins, old_idx, pathstr)
         else
-            table.insert(self.registered_plugins, index, pathstr)
+            table.insert(User.registered_plugins, index, pathstr)
 
             notify(
                 string.format('Moved `%s` from index `%d` to `%d`', pathstr, old_idx, index),
@@ -125,13 +138,13 @@ function User:register_plugin(pathstr, index)
     ---@type string|nil
     local warning = nil
 
-    if index >= 1 and index <= #self.registered_plugins then
-        table.insert(self.registered_plugins, index, pathstr)
+    if index >= 1 and index <= #User.registered_plugins then
+        table.insert(User.registered_plugins, index, pathstr)
     elseif index == 0 then
-        table.insert(self.registered_plugins, pathstr)
-    elseif index < 0 or index > #self.registered_plugins then
+        table.insert(User.registered_plugins, pathstr)
+    elseif index < 0 or index > #User.registered_plugins then
         warning = 'Invalid index, appending instead'
-        table.insert(self.registered_plugins, pathstr)
+        table.insert(User.registered_plugins, pathstr)
     end
 
     if is_nil(warning) then
@@ -142,7 +155,7 @@ function User:register_plugin(pathstr, index)
         hide_from_history = false,
         animate = false,
         timeout = 1000,
-        title = '(user_api:register_plugin)',
+        title = '(user_api.register_plugin)',
     })
 end
 
@@ -168,11 +181,18 @@ function User:reload_plugins()
     return noerr, self.FAILED
 end
 
----@param self UserAPI
-function User:print_loaded_plugins()
-    local notify = self.util.notify.notify
+function User.print_loaded_plugins()
+    local notify = User.util.notify.notify
 
-    notify(inspect(self.registered_plugins), 'info', {
+    local msg = '{'
+
+    for k, v in next, User.registered_plugins do
+        msg = string.format('%s\n  [%s]: %s', msg, tostring(k), v)
+    end
+
+    msg = msg .. '\n}'
+
+    notify(msg, 'info', {
         animate = true,
         hide_from_history = true,
         timeout = 2250,
@@ -244,10 +264,9 @@ function User:plugin_maps()
     Keymaps({ n = Keys })
 end
 
----@param self UserAPI
-function User:setup_keys()
-    local desc = self.maps.kmap.desc
-    local notify = self.util.notify.notify
+function User.setup()
+    local desc = User.maps.kmap.desc
+    local notify = User.util.notify.notify
     local insp = inspect or vim.inspect
 
     ---@type AllMaps
@@ -264,7 +283,7 @@ function User:setup_keys()
                     animate = true,
                 })
 
-                local res, failed = self:reload_plugins()
+                local res, failed = User:reload_plugins()
 
                 if not res then
                     notify(insp(failed), 'error', {
@@ -288,7 +307,7 @@ function User:setup_keys()
         },
         ['<leader>UPl'] = {
             function()
-                self:print_loaded_plugins()
+                User.print_loaded_plugins()
             end,
             desc('Print Loaded Plugins'),
         },
@@ -297,10 +316,10 @@ function User:setup_keys()
     local Keymaps = require('user_api.config.keymaps')
     Keymaps({ n = Keys })
 
-    self:plugin_maps()
-    self.update:setup_maps()
-    self.commands:setup_keys()
-    self.opts:setup_keys()
+    User:plugin_maps()
+    User.update:setup_maps()
+    User.commands:setup_keys()
+    User.opts:setup_keys()
 end
 
 ---@param O? table
