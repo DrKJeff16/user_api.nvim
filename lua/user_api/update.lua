@@ -1,13 +1,11 @@
 ---@diagnostic disable:missing-fields
 
----@class User.Update
----@field update fun(verbose: boolean?): string?
----@field setup_maps fun(self: User.Update)
-
 local WARN = vim.log.levels.WARN
 local INFO = vim.log.levels.INFO
 
----@type User.Update
+---@class User.Update
+---@field update fun(verbose: boolean?): string?
+---@field setup_maps fun()
 local Update = {}
 
 ---@param verbose? boolean
@@ -18,6 +16,7 @@ function Update.update(verbose)
 
     local curr_win = vim.api.nvim_get_current_win
     local curr_tab = vim.api.nvim_get_current_tabpage
+    local cd = vim.api.nvim_set_current_dir
 
     verbose = is_bool(verbose) and verbose or false
 
@@ -30,11 +29,11 @@ function Update.update(verbose)
         '--recurse-submodules',
     }
 
-    vim.api.nvim_set_current_dir(vim.fn.stdpath('config'))
+    cd(vim.fn.stdpath('config'))
 
     local res = vim.fn.system(cmd)
 
-    vim.api.nvim_set_current_dir(og_cwd)
+    cd(og_cwd)
 
     local lvl = res:match('error') and WARN or INFO
 
@@ -52,14 +51,14 @@ function Update.update(verbose)
     end
 
     if res:match('Already up to date') then
-        notify('Jnvim is up to date!', 'info', {
+        notify('Jnvim is up to date!', INFO, {
             animate = true,
             hide_from_history = true,
             timeout = 1750,
             title = 'User API - Update',
         })
     elseif not res:match('error') then
-        notify('You need to restart Nvim!', 'warn', {
+        notify('You need to restart Nvim!', WARN, {
             animate = true,
             hide_from_history = false,
             timeout = 5000,
@@ -70,8 +69,7 @@ function Update.update(verbose)
     return res
 end
 
----@param self User.Update
-function Update:setup_maps()
+function Update.setup_maps()
     local Keymaps = require('user_api.config.keymaps')
     local desc = require('user_api.maps.kmap').desc
 
@@ -80,12 +78,12 @@ function Update:setup_maps()
             ['<leader>U'] = { group = '+User API' },
 
             ['<leader>Uu'] = {
-                self.update,
+                Update.update,
                 desc('Update User Config'),
             },
             ['<leader>UU'] = {
                 function()
-                    self.update(true)
+                    Update.update(true)
                 end,
                 desc('Update User Config (Verbose)'),
             },

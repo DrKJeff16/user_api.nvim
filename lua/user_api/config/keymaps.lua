@@ -1,34 +1,32 @@
 ---@diagnostic disable:missing-fields
 
+-- Setup keymaps
+-- WARN: You must call `Keymaps:set_leader()` beforehand or this will complain
 ---@alias User.Config.Keymaps.CallerFun fun(keys: AllModeMaps, bufnr: integer?, load_defaults: boolean?)
 
 ---@class Keymaps.PreExec
 ---@field ft string[]
 ---@field bt string[]
 
----@class User.Config.Keymaps
----@field NOP string[] Table of keys to no-op after `<leader>` is pressed
----@field no_oped? boolean
----@field Keys AllModeMaps
----@field set_leader fun(self: User.Config.Keymaps, leader: string, local_leader: string?, force: boolean?)
----@field new fun(O: table?): table|User.Config.Keymaps|User.Config.Keymaps.CallerFun
+local Value = require('user_api.check.value')
 
-local Value = require('user_api.check.value') ---@see User.Check.Value Checking utilities
-local Maps = require('user_api.maps') ---@see User.Maps Mapping Utilities
-local Kmap = require('user_api.maps.kmap') ---@see User.Maps.Keymap Mapping Utilities (`vim.keymap` version)
+local is_tbl = Value.is_tbl
+local is_int = Value.is_int
+local is_bool = Value.is_bool
+local type_not_empty = Value.type_not_empty
+local nop = require('user_api.maps').nop
+local map_dict = require('user_api.maps').map_dict
+local desc = require('user_api.maps.kmap').desc
+local ft_get = require('user_api.util').ft_get
+local bt_get = require('user_api.util').bt_get
 
-local is_tbl = Value.is_tbl ---@see User.Check.Value.is_tbl
-local is_int = Value.is_int ---@see User.Check.Value.is_int
-local is_bool = Value.is_bool ---@see User.Check.Value.is_bool
-local type_not_empty = Value.type_not_empty ---@see User.Check.Value.type_not_empty
-local nop = Maps.nop ---@see User.Maps.nop
-local map_dict = Maps.map_dict ---@see User.Maps.map_dict
-local desc = Kmap.desc ---@see User.Maps.Keymap.desc
-local ft_get = require('user_api.util').ft_get ---@see User.Util.ft_get
-local bt_get = require('user_api.util').bt_get ---@see User.Util.bt_get
+local ERROR = vim.log.levels.ERROR
+local WARN = vim.log.levels.WARN
+local INFO = vim.log.levels.INFO
 
 local curr_buf = vim.api.nvim_get_current_buf
 local in_tbl = vim.tbl_contains
+local d_extend = vim.tbl_deep_extend
 
 ---@param vertical? boolean
 ---@return fun()
@@ -42,7 +40,7 @@ local function gen_fun_blank(vertical)
         local win = vim.api.nvim_open_win(buf, true, { vertical = vertical })
 
         ---@type vim.api.keyset.option
-        local set_opts = { buf = buf }
+        local set_opts = { scope = 'local' }
 
         vim.api.nvim_set_current_win(win)
 
@@ -77,11 +75,15 @@ local function buf_del(force)
     }
 
     return function()
-        local prev_ft = ft_get(curr_buf())
-        local prev_bt = bt_get(curr_buf())
+        local buf = curr_buf()
+        local prev_ft, prev_bt = ft_get(buf), bt_get(buf)
+
+        if not force then
+            force = prev_bt == 'terminal'
+        end
 
         -- # HACK: Special workaround for `terminal` buffers
-        vim.cmd.bdelete({ bang = prev_bt == 'terminal' })
+        vim.cmd.bdelete({ bang = force })
 
         if in_tbl(pre_exc.ft, prev_ft) or in_tbl(pre_exc.bt, prev_bt) then
             return
@@ -93,9 +95,11 @@ local function buf_del(force)
     end
 end
 
----@type User.Config.Keymaps|User.Config.Keymaps.CallerFun
+---@class User.Config.Keymaps
+---@field no_oped? boolean
 local Keymaps = {}
 
+-- Table of keys to no-op after `<leader>` is pressed
 Keymaps.NOP = {
     "'",
     '!',
@@ -189,40 +193,41 @@ Keymaps.NOP = {
     '~',
 }
 
---- Global keymaps, plugin-agnostic
+setmetatable(Keymaps.NOP, {
+    __index = Keymaps.NOP,
+    __newindex = function(self, k)
+        error('(user_api.config.keymaps.NOP): Read-only table!', ERROR)
+    end,
+})
+
+-- Global keymaps, plugin-agnostic
 Keymaps.Keys = {
+    -- NORMAL
     n = {
-        ['<leader>F'] = { group = '+Folding' }, --- Folding Control
-        ['<leader>H'] = { group = '+Help' }, --- Help
-        ['<leader>HM'] = { group = '+Man Pages' }, --- Help
-        ['<leader>b'] = { group = '+Buffer' }, --- Buffer Handling
-        ['<leader>f'] = { group = '+File' }, --- File Handling
-        ['<leader>fF'] = { group = '+New File' }, --- New File Creation
-        ['<leader>fi'] = { group = '+Indent' }, --- Indent Control
-        ['<leader>fv'] = { group = '+Script Files' }, --- Script File Handling
-        ['<leader>q'] = { group = '+Quit Nvim' }, --- Exiting
-        ['<leader>t'] = { group = '+Tabs' }, --- Tabs Handling
-        ['<leader>v'] = { group = '+Vim' }, --- Vim
-        ['<leader>ve'] = { group = '+Edit Nvim Config File' }, --- `init.lua` Editing
-        ['<leader>vh'] = { group = '+Checkhealth' }, --- `init.lua` Editing
-        ['<leader>w'] = { group = '+Window' }, --- Window Handling
-        ['<leader>ws'] = { group = '+Split' }, --- Window Splitting
+        ['<leader>'] = { group = '+Open `which-key`' },
+        ['<leader>F'] = { group = '+Folding' }, -- Folding Control
+        ['<leader>H'] = { group = '+Help' }, -- Help
+        ['<leader>HM'] = { group = '+Man Pages' }, -- Help
+        ['<leader>b'] = { group = '+Buffer' }, -- Buffer Handling
+        ['<leader>f'] = { group = '+File' }, -- File Handling
+        ['<leader>fF'] = { group = '+New File' }, -- New File Creation
+        ['<leader>fi'] = { group = '+Indent' }, -- Indent Control
+        ['<leader>fv'] = { group = '+Script Files' }, -- Script File Handling
+        ['<leader>q'] = { group = '+Quit Nvim' }, -- Exiting
+        ['<leader>t'] = { group = '+Tabs' }, -- Tabs Handling
+        ['<leader>v'] = { group = '+Vim' }, -- Vim
+        ['<leader>ve'] = { group = '+Edit Nvim Config File' }, -- `init.lua` Editing
+        ['<leader>vh'] = { group = '+Checkhealth' }, -- `init.lua` Editing
+        ['<leader>w'] = { group = '+Window' }, -- Window Handling
+        ['<leader>ws'] = { group = '+Split' }, -- Window Splitting
+        ['<leader>U'] = { group = '+User API' },
+        ['<leader>UK'] = { group = '+Keymaps' },
 
-        ['<Esc><Esc>'] = {
-            function()
-                vim.schedule(vim.cmd.noh)
-            end,
-            desc('Remove Highlighted Search'),
-        },
+        -- Kill `hlsearch`
+        ['<Esc><Esc>'] = { vim.cmd.noh, desc('Remove Highlighted Search') },
 
-        ['<leader>bd'] = {
-            buf_del(),
-            desc('Close Buffer'),
-        },
-        ['<leader>bD'] = {
-            buf_del(true),
-            desc('Close Buffer Forcefully'),
-        },
+        ['<leader>bd'] = { buf_del(), desc('Close Buffer') },
+        ['<leader>bD'] = { buf_del(true), desc('Close Buffer Forcefully') },
         ['<leader>bf'] = { vim.cmd.bfirst, desc('Goto First Buffer') },
         ['<leader>bl'] = { vim.cmd.blast, desc('Goto Last Buffer') },
         ['<leader>bn'] = { vim.cmd.bnext, desc('Next Buffer') },
@@ -252,7 +257,7 @@ Keymaps.Keys = {
                     ok, err = pcall(vim.cmd.write)
 
                     if ok then
-                        notify(string.format('File Written: `%s`', vim.fn.expand('%')), 'info', {
+                        notify(string.format('File Written: `%s`', vim.fn.expand('%')), INFO, {
                             animate = true,
                             title = 'Vim Write',
                             timeout = 1000,
@@ -263,7 +268,7 @@ Keymaps.Keys = {
                     end
                 end
 
-                notify(err or 'Unable to write', 'error', {
+                notify(err or 'Unable to write', ERROR, {
                     animate = true,
                     title = 'Vim Write',
                     timeout = 2250,
@@ -295,7 +300,7 @@ Keymaps.Keys = {
                     ok, err = pcall(vim.cmd.luafile, '%')
 
                     if ok then
-                        notify('Sourced current Lua file', 'info', {
+                        notify('Sourced current Lua file', INFO, {
                             animate = true,
                             title = 'Lua',
                             timeout = 1500,
@@ -306,7 +311,7 @@ Keymaps.Keys = {
                     end
                 end
 
-                notify(err, 'error', {
+                notify(err, ERROR, {
                     animate = true,
                     title = 'Lua',
                     timeout = 2000,
@@ -332,7 +337,7 @@ Keymaps.Keys = {
                     ok, err = pcall(vim.cmd.source, '%')
 
                     if ok then
-                        notify('Sourced current Vim file', 'info', {
+                        notify('Sourced current Vim file', INFO, {
                             animate = true,
                             title = 'Vim',
                             timeout = 1000,
@@ -343,7 +348,7 @@ Keymaps.Keys = {
                     end
                 end
 
-                notify(err, 'error', {
+                notify(err, ERROR, {
                     animate = true,
                     title = 'Vim',
                     timeout = 2000,
@@ -407,7 +412,7 @@ Keymaps.Keys = {
                 local ok, err = pcall(vim.cmd.luafile, MYVIMRC)
 
                 if ok then
-                    notify('Sourced `init.lua`', 'info', {
+                    notify('Sourced `init.lua`', INFO, {
                         animate = true,
                         title = 'luafile',
                         timeout = 1000,
@@ -417,7 +422,7 @@ Keymaps.Keys = {
                     return
                 end
 
-                notify(err, 'error', {
+                notify(err, ERROR, {
                     animate = true,
                     title = 'luafile',
                     timeout = 2500,
@@ -564,15 +569,35 @@ Keymaps.Keys = {
         },
 
         ['<leader>tA'] = { vim.cmd.tabnew, desc('New Tab') },
-        ['<leader>tD'] = { ':tabclose!<CR>', desc('Close Tab Forcefully') },
+        ['<leader>tD'] = {
+            function()
+                vim.cmd.tabclose({ bang = true })
+            end,
+            desc('Close Tab Forcefully'),
+        },
         ['<leader>ta'] = { ':tabnew ', desc('New Tab (Prompt)', false) },
-        ['<leader>td'] = { vim.cmd.tabclose, desc('Close Tab') },
+        ['<leader>td'] = {
+            function()
+                pcall(vim.cmd.tabclose)
+            end,
+            desc('Close Tab'),
+        },
         ['<leader>tf'] = { vim.cmd.tabfirst, desc('Goto First Tab') },
         ['<leader>tl'] = { vim.cmd.tablast, desc('Goto Last Tab') },
         ['<leader>tn'] = { vim.cmd.tabnext, desc('Next Tab') },
         ['<leader>tp'] = { vim.cmd.tabprevious, desc('Previous Tab') },
+
+        ['<leader>UKp'] = {
+            function()
+                vim.notify(inspect(Keymaps.Keys))
+            end,
+            desc('Print all custom keymaps in their respective modes'),
+        },
     },
+
+    -- VISUAL
     v = {
+        ['<leader>'] = { group = '+Open `which-key`' },
         ['<leader>f'] = { group = '+File' }, --- File Handling
         ['<leader>fF'] = { group = '+Folding' }, --- Folding
         ['<leader>h'] = { group = '+Help' }, --- Help
@@ -600,7 +625,7 @@ Keymaps.Keys = {
                     end
                 end
 
-                notify(err or 'Unable to write', 'error', {
+                notify(err or 'Unable to write', ERROR, {
                     animate = true,
                     title = 'Vim Write',
                     timeout = 2250,
@@ -612,26 +637,26 @@ Keymaps.Keys = {
 
         ['<leader>ir'] = { ':retab<CR>', desc('Retab Selection') },
 
-        ['<leader>qQ'] = { '<CMD>qa!<CR>', desc('Quit Nvim Forcefully') },
-        ['<leader>qq'] = { vim.cmd.qa, desc('Quit Nvim') },
+        ['<leader>qQ'] = { ':qa!<CR>', desc('Quit Nvim Forcefully') },
+        ['<leader>qq'] = { vim.cmd.quitall, desc('Quit Nvim') },
     },
     t = {
         ['<Esc>'] = { '<C-\\><C-n>', desc('Escape Terminal') },
     },
 }
 
---- Set the `<leader>` key and, if desired, the `<localleader>` aswell
---- ---
---- ## Description
---- Setup a key as `<leader>` and `<localleader>`, but you can also set `<localleader>` to
---- a different key if you want.
----
---- If `<localleader>` is not explicitly set, then it'll be set as `<leader>`
----@param self User.Config.Keymaps
+-- Set the `<leader>` key and, if desired, the `<localleader>` aswell
+-- ---
+-- ## Description
+-- Setup a key as `<leader>` and `<localleader>`, but you can also set `<localleader>` to
+-- a different key if you want.
+--
+-- If `<localleader>` is not explicitly set, then it'll be set as `<leader>`
+-- ---
 ---@param leader string _`<leader>`_ key string (defaults to `<Space>`)
 ---@param local_leader? string _`<localleader>`_ string (defaults to `<Space>`)
 ---@param force? boolean Force leader switch (defaults to `false`)
-function Keymaps:set_leader(leader, local_leader, force)
+function Keymaps.set_leader(leader, local_leader, force)
     leader = type_not_empty('string', leader) and leader or '<Space>'
     local_leader = type_not_empty('string', local_leader) and local_leader or leader
     force = is_bool(force) and force or false
@@ -692,13 +717,13 @@ function Keymaps.new(O)
         ---@param bufnr? integer
         ---@param load_defaults? boolean
         __call = function(self, keys, bufnr, load_defaults)
-            local MODES = Maps.modes
+            local MODES = require('user_api.maps').modes
             local insp = inspect or vim.inspect
 
             local notify = require('user_api.util.notify').notify
 
             if not leader_set then
-                notify('`keymaps:set_leader()` not called!', 'warn', {
+                notify('`keymaps.set_leader()` not called!', WARN, {
                     hide_from_history = false,
                     timeout = 3250,
                     title = '[WARNING] (user_api.config.keymaps.setup)',
@@ -716,7 +741,7 @@ function Keymaps.new(O)
                 if not in_tbl(MODES, k) then
                     notify(
                         string.format('Ignoring badly formatted table\n`%s`', insp(keys)),
-                        'warn',
+                        WARN,
                         {
                             title = '(user_api.config.keymaps())',
                             animate = true,
@@ -745,13 +770,12 @@ function Keymaps.new(O)
             self.no_oped = true
 
             ---@type AllModeMaps
-            local res = load_defaults and vim.tbl_deep_extend('keep', parsed_keys, self.Keys)
-                or parsed_keys
+            local res = load_defaults and d_extend('keep', parsed_keys, self.Keys) or parsed_keys
 
             --- Set keymaps
             map_dict(res, 'wk.register', true, nil, bufnr or nil)
 
-            self.Keys = vim.tbl_deep_extend('keep', vim.deepcopy(self.Keys), parsed_keys)
+            self.Keys = d_extend('keep', vim.deepcopy(self.Keys), parsed_keys)
         end,
     })
 end
