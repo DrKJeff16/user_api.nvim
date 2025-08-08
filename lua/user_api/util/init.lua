@@ -1,45 +1,20 @@
 ---@diagnostic disable:missing-fields
 
----@module 'user_api.util.autocmd'
----@module 'user_api.util.notify'
----@module 'user_api.util.string'
-
 ---@alias AnyDict table<string|integer, any>
 
 ---@alias DirectionFun fun(t: AnyDict): res: AnyDict
-
----@class DirectionFuns
----@field r DirectionFun
----@field l DirectionFun
 
 local curr_buf = vim.api.nvim_get_current_buf
 local optset = vim.api.nvim_set_option_value
 local optget = vim.api.nvim_get_option_value
 local in_tbl = vim.tbl_contains
 
+local INFO = vim.log.levels.INFO
 local ERROR = vim.log.levels.ERROR
 
 local augroup = vim.api.nvim_create_augroup
 
 ---@class User.Util
----@field notify User.Util.Notify
----@field au User.Util.Autocmd
----@field string User.Util.String
----@field has_words_before fun(): boolean
----@field pop_values fun(T: table, V: any): table,...
----@field xor fun(x: boolean, y: boolean): boolean
----@field strip_fields fun(T: AnyDict, values: string[]|string): res: AnyDict
----@field strip_values fun(T: AnyDict, values: any[], max_instances: integer?): table
----@field ft_set fun(s: string?, bufnr: integer?): fun()
----@field bt_get fun(bufnr: integer?): string
----@field ft_get fun(bufnr: integer?): string
----@field get_opts_tbl fun(s: string[]|string, bufnr: integer?): res: AnyDict
----@field setup_autocmd fun()
----@field displace_letter fun(c: string, direction: ('next'|'prev')?, cycle: boolean?): string
----@field mv_tbl_values fun(T: AnyDict, steps: integer?, direction: ('r'|'l')?): res: AnyDict
----@field reverse_tbl fun(T: table): table
----@field discard_dups fun(data: string|table): res: string|table
----@field new fun(O: table?): table|User.Util
 local Util = {}
 
 Util.notify = require('user_api.util.notify')
@@ -102,7 +77,7 @@ function Util.mv_tbl_values(T, steps, direction)
     steps = steps > 0 and steps or 1
     direction = (direction ~= nil and in_tbl({ 'l', 'r' }, direction)) and direction or 'r'
 
-    ---@type DirectionFuns
+    ---@class DirectionFuns
     local direction_funcs = {
 
         ---@type DirectionFun
@@ -395,6 +370,10 @@ function Util.setup_autocmd()
                 {
                     group = group,
                     pattern = {
+                        '*.yaml',
+                        '*.yml',
+                        '*.md',
+                        '*.mdx',
                         '*.C',
                         '*.H',
                         '*.c++',
@@ -415,7 +394,6 @@ function Util.setup_autocmd()
                             softtabstop = 2,
                             expandtab = true,
                             autoindent = true,
-                            filetype = 'cpp',
                         }
 
                         for opt, val in next, opt_dict do
@@ -434,21 +412,24 @@ function Util.setup_autocmd()
                         local Keymaps = require('user_api.config.keymaps')
                         local executable = require('user_api.check.exists').executable
                         local desc = require('user_api.maps.kmap').desc
+                        local notify = Util.notify.notify
 
                         local buf = args.buf
 
                         local bt = Util.bt_get(buf)
                         local ft = Util.ft_get(buf)
 
+                        ---@type vim.api.keyset.option
+                        local O = { scope = 'local' }
+
                         if ft == 'lazy' then
-                            optset('signcolumn', 'no', { scope = 'local' })
-                            optset('number', false, { scope = 'local' })
+                            optset('signcolumn', 'no', O)
+                            optset('number', false, O)
                             return
                         end
 
                         if bt == 'help' or ft == 'help' then
                             vim.schedule(function()
-                                local O = { scope = 'local' }
                                 optset('signcolumn', 'no', O)
                                 optset('number', false, O)
                                 optset('wrap', true, O)
@@ -460,15 +441,11 @@ function Util.setup_autocmd()
                             return
                         end
 
-                        if ft == 'lua' then
-                            if not optget('modifiable', { scope = 'local' }) then
-                                return
-                            end
+                        if not optget('modifiable', O) then
+                            return
+                        end
 
-                            if not executable('stylua') then
-                                return
-                            end
-
+                        if ft == 'lua' and executable('stylua') then
                             Keymaps({
                                 n = {
                                     ['<leader><C-l>'] = {
@@ -477,34 +454,21 @@ function Util.setup_autocmd()
                                             local ok, _ = pcall(vim.cmd, 'silent! !stylua %')
 
                                             if ok then
-                                                Util.notify.notify(
-                                                    'Formatted successfully!',
-                                                    'info',
-                                                    {
-                                                        title = 'StyLua',
-                                                        animate = true,
-                                                        timeout = 750,
-                                                        hide_from_history = true,
-                                                    }
-                                                )
+                                                notify('Formatted successfully!', INFO, {
+                                                    title = 'StyLua',
+                                                    animate = true,
+                                                    timeout = 350,
+                                                    hide_from_history = true,
+                                                })
                                             end
                                         end,
                                         desc('Format With `stylua`'),
                                     },
                                 },
                             }, buf)
-
-                            return
                         end
 
-                        if ft == 'python' then
-                            -- Make sure the buffer is modifiable
-                            if
-                                not (optget('modifiable', { buf = buf }) and executable('isort'))
-                            then
-                                return
-                            end
-
+                        if ft == 'python' and executable('isort') then
                             Keymaps({
                                 n = {
                                     ['<leader><C-l>'] = {
@@ -513,24 +477,18 @@ function Util.setup_autocmd()
                                             local ok, _ = pcall(vim.cmd, 'silent! !isort %')
 
                                             if ok then
-                                                Util.notify.notify(
-                                                    'Formatted successfully!',
-                                                    'info',
-                                                    {
-                                                        title = 'isort',
-                                                        animate = true,
-                                                        timeout = 750,
-                                                        hide_from_history = true,
-                                                    }
-                                                )
+                                                notify('Formatted successfully!', INFO, {
+                                                    title = 'isort',
+                                                    animate = true,
+                                                    timeout = 350,
+                                                    hide_from_history = true,
+                                                })
                                             end
                                         end,
                                         desc('Format With `isort`'),
                                     },
                                 },
                             }, buf)
-
-                            return
                         end
                     end,
                 },
