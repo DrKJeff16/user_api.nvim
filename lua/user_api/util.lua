@@ -1,16 +1,15 @@
----@alias AnyDict table<string, any>
-
----@alias DirectionFun fun(t: AnyDict): res: AnyDict
-
 local ERROR = vim.log.levels.ERROR
 local INFO = vim.log.levels.INFO
 
 local curr_buf = vim.api.nvim_get_current_buf
 local optset = vim.api.nvim_set_option_value
 local optget = vim.api.nvim_get_option_value
-local in_tbl = vim.tbl_contains
-
 local augroup = vim.api.nvim_create_augroup
+local buf_lines = vim.api.nvim_buf_get_lines
+local win_cursor = vim.api.nvim_win_get_cursor
+local curr_win = vim.api.nvim_get_current_win
+local in_tbl = vim.tbl_contains
+local validate = vim.validate
 
 ---@class User.Util
 local Util = {}
@@ -21,26 +20,23 @@ Util.string = require('user_api.util.string')
 
 ---@return boolean
 function Util.has_words_before()
-    local buf_lines = vim.api.nvim_buf_get_lines
-    local win_cursor = vim.api.nvim_win_get_cursor
-    local curr_win = vim.api.nvim_get_current_win
-
     local line, col = (unpack or table.unpack)(win_cursor(curr_win()))
     return col ~= 0 and buf_lines(0, line - 1, line, true)[1]:sub(col, col):match('%s') == nil
 end
 
----@param s string|string[]
+---@param s string[]|string
 ---@param bufnr? integer
----@return AnyDict res
+---@return table<string, any> res
 function Util.get_opts_tbl(s, bufnr)
-    local Value = require('user_api.check.value')
+    validate('s', s, { 'string', 'table' }, false, 'string[]|string')
+    validate('bufnr', bufnr, 'number', true, 'integer')
 
-    local is_int = Value.is_int
+    local Value = require('user_api.check.value')
     local type_not_empty = Value.type_not_empty
 
-    bufnr = is_int(bufnr) and bufnr or curr_buf()
+    bufnr = bufnr or curr_buf()
 
-    ---@type AnyDict
+    ---@type table<string, any>
     local res = {}
 
     if type_not_empty('string', s) then
@@ -56,21 +52,14 @@ function Util.get_opts_tbl(s, bufnr)
     return res
 end
 
----@param T AnyDict
+---@param T table<string, any>
 ---@param steps? integer
 ---@param direction? 'l'|'r'
----@return AnyDict res
+---@return table<string, any> res
 function Util.mv_tbl_values(T, steps, direction)
-    local notify = Util.notify.notify
-
-    if T == nil or type(T) ~= 'table' then
-        notify("Input isn't a table, or it is empty", ERROR, {
-            title = '(user_api.util.mv_tbl_values)',
-            animate = true,
-            hide_from_history = false,
-            timeout = 2500,
-        })
-    end
+    validate('T', T, 'table', false, 'table<string, any>')
+    validate('steps', steps, 'number', true, 'integer')
+    validate('direction', direction, 'string', true, "'l'|'r'")
 
     steps = steps > 0 and steps or 1
     direction = (direction ~= nil and in_tbl({ 'l', 'r' }, direction)) and direction or 'r'
@@ -78,51 +67,44 @@ function Util.mv_tbl_values(T, steps, direction)
     ---@class DirectionFuns
     local direction_funcs = {
 
-        ---@type DirectionFun
+        ---@param t table<string, any>
+        ---@return table<string, any> res
         r = function(t)
             ---@type string[]
             local keys = vim.tbl_keys(t)
             table.sort(keys)
             local len = #keys
 
-            ---@type AnyDict
+            ---@type table<string, any>
             local res = {}
 
             for i, v in next, keys do
-                if i == 1 then
-                    res[v] = t[keys[len]]
-                else
-                    res[v] = t[keys[i - 1]]
-                end
+                res[v] = t[keys[i == 1 and len or (i - 1)]]
             end
 
             return res
         end,
 
-        ---@type DirectionFun
+        ---@param t table<string, any>
+        ---@return table<string, any> res
         l = function(t)
             ---@type string[]
             local keys = vim.tbl_keys(t)
             table.sort(keys)
             local len = #keys
 
-            ---@type AnyDict
+            ---@type table<string, any>
             local res = {}
 
             for i, v in next, keys do
-                if i == len then
-                    res[v] = t[keys[1]]
-                elseif i < len and i > 0 then
-                    res[v] = t[keys[i + 1]]
-                end
+                res[v] = t[keys[i == len and 1 or (i + 1)]]
             end
 
             return res
         end,
     }
 
-    local res = T
-    local func = direction_funcs[direction]
+    local res, func = T, direction_funcs[direction]
 
     while steps > 0 do
         res = func(res)
@@ -138,47 +120,40 @@ end
 ---@param y boolean
 ---@return boolean
 function Util.xor(x, y)
-    local Value = require('user_api.check.value')
-
-    local is_bool = Value.is_bool
-    local notify = Util.notify.notify
-
-    if not is_bool({ x, y }, true) then
-        notify('An argument is not of boolean type', 'error', {
-            title = '(user_api.util.xor)',
-            animate = true,
-            timeout = 2250,
-            hide_from_history = false,
-        })
-        return false
-    end
+    validate('x', x, 'boolean', false)
+    validate('y', y, 'boolean', false)
 
     return (x and not y) or (not x and y)
 end
 
----@param T AnyDict
+---@param T table<string, any>
 ---@param fields string|integer|(string|integer)[]
----@return AnyDict res
+---@return table<string, any> res
 function Util.strip_fields(T, fields)
+    validate('T', T, 'table', false, 'table<string, any>')
+    validate(
+        'fields',
+        fields,
+        { 'string', 'number', 'table' },
+        false,
+        'string|integer|(string|integer)[]'
+    )
+
     local Value = require('user_api.check.value')
 
     local is_str = Value.is_str
     local field = Value.fields
     local type_not_empty = Value.type_not_empty
 
-    if not type_not_empty('table', T) then
-        error('(user_api.util.strip_fields): Argument is not a table', ERROR)
-    end
-
-    if not (type_not_empty('string', fields) or type_not_empty('table', fields)) then
+    if not type_not_empty('table', fields) then
         return T
     end
 
-    ---@type AnyDict
+    ---@type table<string, any>
     local res = {}
 
     if is_str(fields) then
-        if not field(fields, T) then
+        if not (type_not_empty('string', fields) and field(fields, T)) then
             return T
         end
 
@@ -200,31 +175,28 @@ function Util.strip_fields(T, fields)
     return res
 end
 
----@param T AnyDict
+---@param T table<string, any>
 ---@param values any[]
 ---@param max_instances? integer
----@return AnyDict res
+---@return table<string, any> res
 function Util.strip_values(T, values, max_instances)
+    validate('T', T, 'table', false, 'table<string, any>')
+    validate('values', values, 'table', false, 'any[]')
+    validate('max_instances', max_instances, 'table', true, 'integer')
+
     local Value = require('user_api.check.value')
 
     local type_not_empty = Value.type_not_empty
     local is_int = Value.is_int
-    local notify = Util.notify.notify
 
     if not (type_not_empty('table', T) or type_not_empty('table', values)) then
-        notify('Not a table', ERROR, {
-            title = '(user_api.util.strip_values)',
-            animate = true,
-            hide_from_history = false,
-            timeout = 1750,
-        })
+        error('(user_api.util.strip_values): Empty tables as args!', ERROR)
     end
 
-    max_instances = is_int(max_instances) and max_instances or 0
+    max_instances = max_instances or 0
 
-    ---@type AnyDict
-    local res = {}
-    local count = 0
+    ---@type table<string, any>, integer
+    local res, count = {}, 0
 
     for k, v in next, T do
         -- Both arguments can't be true simultaneously
@@ -250,13 +222,11 @@ end
 ---@param bufnr? integer
 ---@return fun()
 function Util.ft_set(s, bufnr)
-    local Value = require('user_api.check.value')
+    validate('s', s, 'string', true)
+    validate('bufnr', bufnr, 'number', true, 'integer')
 
-    local is_int = Value.is_int
-    local is_str = Value.is_str
-
-    s = is_str(s) and s or ''
-    bufnr = is_int(bufnr) and bufnr or curr_buf()
+    s = s or ''
+    bufnr = bufnr or curr_buf()
 
     return function()
         optset('ft', s, { buf = bufnr })
@@ -266,9 +236,8 @@ end
 ---@param bufnr? integer
 ---@return string
 function Util.bt_get(bufnr)
-    local is_int = require('user_api.check.value').is_int
-
-    bufnr = is_int(bufnr) and bufnr or curr_buf()
+    validate('bufnr', bufnr, 'number', true, 'integer')
+    bufnr = bufnr or curr_buf()
 
     return optget('bt', { buf = bufnr })
 end
@@ -276,9 +245,8 @@ end
 ---@param bufnr? integer
 ---@return string
 function Util.ft_get(bufnr)
-    local is_int = require('user_api.check.value').is_int
-
-    bufnr = is_int(bufnr) and bufnr or curr_buf()
+    validate('bufnr', bufnr, 'number', true, 'integer')
+    bufnr = bufnr or curr_buf()
 
     return optget('ft', { buf = bufnr })
 end
@@ -420,6 +388,18 @@ function Util.setup_autocmd()
             },
         },
         {
+            events = { 'TextYankPost' },
+            opts_tbl = {
+                {
+                    pattern = '*',
+                    group = group,
+                    callback = function()
+                        vim.hl.on_yank({ higroup = 'Visual', timeout = 300 })
+                    end,
+                },
+            },
+        },
+        {
             events = { 'BufEnter', 'WinEnter', 'BufWinEnter' },
             opts_tbl = {
                 {
@@ -427,13 +407,11 @@ function Util.setup_autocmd()
                     callback = function(ev)
                         local Keymaps = require('user_api.config.keymaps')
                         local executable = require('user_api.check.exists').executable
-                        local desc = require('user_api.maps.kmap').desc
+                        local desc = require('user_api.maps').desc
                         local notify = Util.notify.notify
 
-                        local buf = ev.buf
-
-                        local bt = Util.bt_get(buf)
-                        local ft = Util.ft_get(buf)
+                        local bt = Util.bt_get(ev.buf)
+                        local ft = Util.ft_get(ev.buf)
 
                         ---@type vim.api.keyset.option
                         local O = { scope = 'local' }
@@ -445,14 +423,12 @@ function Util.setup_autocmd()
                         end
 
                         if bt == 'help' or ft == 'help' then
-                            vim.schedule(function()
-                                optset('signcolumn', 'no', O)
-                                optset('number', false, O)
-                                optset('wrap', true, O)
+                            optset('signcolumn', 'no', O)
+                            optset('number', false, O)
+                            optset('wrap', true, O)
 
-                                vim.cmd.wincmd('=')
-                                vim.cmd.noh()
-                            end)
+                            vim.cmd.wincmd('=')
+                            vim.cmd.noh()
 
                             return
                         end
@@ -467,7 +443,7 @@ function Util.setup_autocmd()
                                     ['<leader><C-l>'] = {
                                         function()
                                             ---@diagnostic disable-next-line:param-type-mismatch
-                                            local ok, _ = pcall(vim.cmd, 'silent! !stylua %')
+                                            local ok = pcall(vim.cmd, 'silent! !stylua %')
 
                                             if not ok then
                                                 return
@@ -476,14 +452,14 @@ function Util.setup_autocmd()
                                             notify('Formatted successfully!', INFO, {
                                                 title = 'StyLua',
                                                 animate = true,
-                                                timeout = 350,
+                                                timeout = 200,
                                                 hide_from_history = true,
                                             })
                                         end,
                                         desc('Format With `stylua`'),
                                     },
                                 },
-                            }, buf)
+                            }, ev.buf)
                         end
 
                         if ft == 'python' and executable('isort') then
@@ -492,7 +468,7 @@ function Util.setup_autocmd()
                                     ['<leader><C-l>'] = {
                                         function()
                                             ---@diagnostic disable-next-line:param-type-mismatch
-                                            local ok, _ = pcall(vim.cmd, 'silent! !isort %')
+                                            local ok = pcall(vim.cmd, 'silent! !isort %')
 
                                             if not ok then
                                                 return
@@ -501,14 +477,14 @@ function Util.setup_autocmd()
                                             notify('Formatted successfully!', INFO, {
                                                 title = 'isort',
                                                 animate = true,
-                                                timeout = 350,
+                                                timeout = 200,
                                                 hide_from_history = true,
                                             })
                                         end,
                                         desc('Format With `isort`'),
                                     },
                                 },
-                            }, buf)
+                            }, ev.buf)
                         end
                     end,
                 },
@@ -516,7 +492,7 @@ function Util.setup_autocmd()
         },
     }
 
-    local ok, _ = pcall(require, 'orgmode')
+    local ok = pcall(require, 'orgmode')
 
     if ok then
         table.insert(AUS[1].opts_tbl, {
@@ -537,20 +513,17 @@ end
 
 ---@param c string
 ---@param direction? 'next'|'prev'
----@param cycle? boolean
 ---@return string
-function Util.displace_letter(c, direction, cycle)
+function Util.displace_letter(c, direction)
     local Value = require('user_api.check.value')
     local A = Util.string.alphabet
 
     local fields = Value.fields
     local is_str = Value.is_str
-    local is_bool = Value.is_bool
     local mv = Util.mv_tbl_values
 
     direction = (is_str(direction) and in_tbl({ 'next', 'prev' }, direction)) and direction
         or 'next'
-    cycle = is_bool(cycle) and cycle or false
 
     if c == '' then
         return 'a'
@@ -648,15 +621,9 @@ function Util.reverse_tbl(T)
     return T
 end
 
----@param O? table
----@return table|User.Util|fun(msg: string)
-function Util.new(O)
-    local is_tbl = require('user_api.check.value').is_tbl
-    O = is_tbl(O) and O or {}
+---@type User.Util
+local M = setmetatable({}, { __index = Util })
 
-    return setmetatable(O, { __index = Util })
-end
-
-return Util.new()
+return M
 
 --- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:

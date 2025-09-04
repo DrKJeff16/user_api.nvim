@@ -1,4 +1,5 @@
 local fmt = string.format
+local validate = vim.validate
 
 local Value = require('user_api.check.value')
 
@@ -22,16 +23,34 @@ function Opts.get_all_opts()
     return require('user_api.opts.all_opts')
 end
 
----@param T User.Opts.AllOpts
----@return string[]
-local function gen_toggleable(T)
-    T = type_not_empty('table', T) and T or Opts.get_all_opts()
+---@param ArgLead string
+---@param CursorPos integer
+local function complete_fun(ArgLead, _, CursorPos)
+    local len = ArgLead:len()
+    local CMD_LEN = string.len('OptsToggle ') + 1
 
-    local long = vim.tbl_keys(T)
-    local short = vim.tbl_values(T)
+    if len == 0 or CursorPos < CMD_LEN then
+        return copy(Opts.toggleable)
+    end
 
-    ---@type string[]|table
+    ---@type string[]
     local valid = {}
+    for _, o in next, Opts.toggleable do
+        if o:match(ArgLead) ~= nil and string.find(o, '^' .. ArgLead) then
+            table.insert(valid, o)
+        end
+    end
+
+    return valid
+end
+
+---@return string[] valid
+function Opts.gen_toggleable()
+    ---@type string[]
+    local valid = {}
+
+    local T = Opts.get_all_opts()
+    local long, short = vim.tbl_keys(T), vim.tbl_values(T)
 
     for _, opt in next, long do
         local value = vim.api.nvim_get_option_value(opt, { scope = 'global' })
@@ -41,17 +60,13 @@ local function gen_toggleable(T)
         end
     end
     for _, opt in next, short do
-        if opt == '' then
-            goto continue
+        if opt ~= '' then
+            local value = vim.api.nvim_get_option_value(opt, { scope = 'global' })
+
+            if type(value) == 'boolean' or in_tbl({ 'no', 'yes' }, value) then
+                table.insert(valid, opt)
+            end
         end
-
-        local value = vim.api.nvim_get_option_value(opt, { scope = 'global' })
-
-        if type(value) == 'boolean' or in_tbl({ 'no', 'yes' }, value) then
-            table.insert(valid, opt)
-        end
-
-        ::continue::
     end
 
     table.sort(valid)
@@ -59,15 +74,7 @@ local function gen_toggleable(T)
     return valid
 end
 
-Opts.toggleable = gen_toggleable(Opts.get_all_opts())
-
-setmetatable(Opts.toggleable, {
-    __index = Opts.toggleable,
-
-    __newindex = function(self, k, v)
-        error('Toggleable options list is read only!', ERROR)
-    end,
-})
+Opts.toggleable = Opts.gen_toggleable()
 
 ---@return User.Opts.Spec
 function Opts.get_defaults()
@@ -81,11 +88,8 @@ Opts.options = {}
 ---@param verbose? boolean
 ---@return User.Opts.Spec parsed_opts
 function Opts.long_opts_convert(T, verbose)
-    ---@type User.Opts.Spec
-    local parsed_opts = {}
-
-    ---@type string
-    local msg = ''
+    ---@type User.Opts.Spec, string
+    local parsed_opts, msg = {}, ''
 
     verbose = is_bool(verbose) and verbose or false
 
@@ -106,15 +110,13 @@ function Opts.long_opts_convert(T, verbose)
     table.sort(keys)
 
     for opt, val in next, T do
-        local new_opt = ''
-
         -- If neither long nor short (known) option, append to warning message
         if not (in_tbl(keys, opt) or Value.tbl_values({ opt }, ALL_OPTIONS)) then
             msg = fmt('%s- Option `%s` not valid!\n', msg, opt)
         elseif in_tbl(keys, opt) then
             parsed_opts[opt] = val
         else
-            new_opt = Value.tbl_values({ opt }, ALL_OPTIONS, true)
+            local new_opt = Value.tbl_values({ opt }, ALL_OPTIONS, true)
             if is_str(new_opt) and new_opt ~= '' then
                 parsed_opts[new_opt] = val
                 verb_str = fmt('%s%s ==> %s\n', verb_str, opt, new_opt)
@@ -137,31 +139,28 @@ end
 
 --- Option setter for the aforementioned options dictionary.
 --- ---
---- @param O User.Opts.Spec A dictionary with keys acting as `vim.opt` fields, and values
+--- @param O User.Opts.Spec A dictionary with keys acting as `vim.o` fields, and values
 --- @param verbose? boolean Enable verbose printing if `true`
 function Opts.optset(O, verbose)
-    local insp = inspect or vim.inspect
-    local curr_buf = vim.api.nvim_get_current_buf
+    validate('O', O, 'table', false, 'User.Opts.Spec')
+    validate('verbose', verbose, 'boolean', true)
+    verbose = verbose ~= nil and verbose or false
 
-    O = is_tbl(O) and O or {}
-    verbose = is_bool(verbose) and verbose or false
+    local insp = vim.inspect
+    local curr_buf = vim.api.nvim_get_current_buf
 
     if not vim.api.nvim_get_option_value('modifiable', { buf = curr_buf() }) then
         return
     end
 
+    local msg, verb_msg = '', ''
     local opts = Opts.long_opts_convert(O, verbose)
 
-    local msg = ''
-    local verb_msg = ''
-
     for k, v in next, opts do
-        if type(vim.opt[k]:get()) == type(v) then
+        if type(vim.o[k]) == type(v) then
             Opts.options[k] = v
-            vim.opt[k] = Opts.options[k]
+            vim.o[k] = Opts.options[k]
             verb_msg = fmt('%s- %s: %s\n', verb_msg, k, insp(v))
-        else
-            msg = fmt('%sOption `%s` is not a valid field for `vim.opt`\n', msg, k)
         end
     end
 
@@ -183,55 +182,44 @@ function Opts.set_cursor_blink()
     end
 
     Opts.optset({
-        guicursor = {
-            'n-v-c:block',
-            'i-ci-ve:ver25',
-            'r-cr:hor20',
-            'o:hor50',
-            'a:blinkwait700-blinkoff400-blinkon250-Cursor/lCursor',
-            'sm:block-blinkwait175-blinkoff150-blinkon175',
-        },
+        guicursor = 'n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50,a:blinkwait700-blinkoff400-blinkon250-Cursor/lCursor,sm:block-blinkwait175-blinkoff150-blinkon175',
     })
 end
 
 function Opts.print_set_opts()
     local T = copy(Opts.options)
     table.sort(T)
-    vim.notify((inspect or vim.inspect)(T), INFO)
+    vim.notify(vim.inspect(T), INFO)
 end
 
 ---@param O string[]|string
 ---@param verbose? boolean
 function Opts.toggle(O, verbose)
-    verbose = is_bool(verbose) and verbose or false
+    validate('O', O, { 'string', 'table' }, false, 'string[]|string')
+    validate('verbose', verbose, 'boolean', true)
+
+    verbose = verbose ~= nil and verbose or false
 
     if is_str(O) then
         O = { O }
     end
 
-    if not type_not_empty('table', O) then
+    if vim.tbl_isempty(O) then
         return
     end
 
-    local toggleables = Opts.toggleable
-
     for _, opt in next, O do
-        if not in_tbl(toggleables, opt) then
-            goto continue
+        if in_tbl(Opts.toggleable, opt) then
+            local value = vim.o[opt]
+
+            if is_bool(value) then
+                value = not value
+            else
+                value = value == 'yes' and 'no' or 'yes'
+            end
+
+            Opts.optset({ [opt] = value }, verbose)
         end
-
-        local _option = vim.opt[opt]
-        local value = _option:get()
-
-        if is_bool(value) then
-            value = not value
-        else
-            value = value == 'yes' and 'no' or 'yes'
-        end
-
-        Opts.optset({ [opt] = value }, verbose)
-
-        ::continue::
     end
 end
 
@@ -242,47 +230,20 @@ function Opts.setup_cmds()
         local cmds = {}
         for _, v in next, ctx.fargs do
             if not (in_tbl(Opts.toggleable, v) or ctx.bang) then
-                error(fmt('Cannot toggle option `%s`, aborting', v), ERROR)
+                error(fmt('(OptsToggle): Cannot toggle option `%s`, aborting', v), ERROR)
             end
 
-            if not in_tbl(Opts.toggleable, v) and ctx.bang then
-                goto continue
-            end
-
-            if not in_tbl(cmds, v) then
+            if in_tbl(Opts.toggleable, v) and not in_tbl(cmds, v) then
                 table.insert(cmds, v)
             end
-
-            ::continue::
         end
 
         Opts.toggle(cmds, ctx.bang)
     end, {
         nargs = '+',
 
-        ---@param ArgLead string
-        ---@param CmdLine string
-        ---@param CursorPos integer
-        complete = function(ArgLead, CmdLine, CursorPos)
-            local toggleable = Opts.toggleable
-            local len = string.len(ArgLead)
+        complete = complete_fun,
 
-            local CMD_LEN = string.len('OptsToggle ') + 1
-
-            if len == 0 or CursorPos < CMD_LEN then
-                return toggleable
-            end
-
-            ---@type string[]
-            local valid = {}
-            for _, o in next, toggleable do
-                if o:match(ArgLead) ~= nil and string.find(o, '^' .. ArgLead) then
-                    table.insert(valid, o)
-                end
-            end
-
-            return valid
-        end,
         bang = true,
         desc = 'Toggle toggleable Vim Options',
     })
@@ -290,7 +251,7 @@ end
 
 function Opts.setup_maps()
     local Keymaps = require('user_api.config.keymaps')
-    local desc = require('user_api.maps.kmap').desc
+    local desc = require('user_api.maps').desc
 
     Keymaps({
         n = {
@@ -314,7 +275,7 @@ function Opts.new()
     return setmetatable(Opts, {
         __index = Opts,
 
-        __newindex = function(self, k, v)
+        __newindex = function(_, _, _)
             error('(user_api.opts): This module is read only!', ERROR)
         end,
 
@@ -334,12 +295,9 @@ function Opts.new()
             local parsed_opts = self.long_opts_convert(override, verbose)
 
             ---@type table|vim.bo|vim.wo
-            self.options = deep_extend('keep', parsed_opts, copy(self.options))
+            Opts.options = deep_extend('keep', parsed_opts, self.options)
 
-            self.optset(self.options, verbose)
-
-            -- NOTE: Set to global `Opts` table aswell
-            Opts.options = self.options
+            Opts.optset(Opts.options, verbose)
         end,
     })
 end

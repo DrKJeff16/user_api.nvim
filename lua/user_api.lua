@@ -1,3 +1,7 @@
+local fmt = string.format
+
+local validate = vim.validate
+
 local WARN = vim.log.levels.WARN
 local INFO = vim.log.levels.INFO
 local ERROR = vim.log.levels.ERROR
@@ -19,13 +23,10 @@ User.highlight = require('user_api.highlight')
 
 User.config = require('user_api.config')
 
----@type string[]|table
-User.paths = {}
+---@type string[]|table, string[]|table
+User.paths, User.FAILED = {}, {}
 
----@type string[]|table
-User.FAILED = {}
-
----@type string[]|table
+---@type string[]
 User.registered_plugins = {}
 
 ---Registers a plugin in the User API for possible reloading later.
@@ -33,13 +34,17 @@ User.registered_plugins = {}
 ---@param pathstr string The path of the plugin to be registered
 ---@param index? integer An optional integer to insert the plugin in a given position
 function User.register_plugin(pathstr, index)
-    local _NAME = 'user_api.register_plugin'
     local Value = User.check.value
 
-    local is_int = Value.is_int
     local type_not_empty = Value.type_not_empty
     local tbl_contains = vim.tbl_contains
     local in_tbl_range = Value.in_tbl_range
+    local is_int = Value.is_int
+
+    validate('pathstr', pathstr, 'string', false)
+    validate('index', index, is_int, true, 'integer')
+
+    local _NAME = 'user_api.register_plugin'
 
     index = (is_int(index) and in_tbl_range(index, User.registered_plugins)) and index or 0
 
@@ -64,55 +69,28 @@ function User.register_plugin(pathstr, index)
             table.insert(User.registered_plugins, index, pathstr)
 
             vim.notify(
-                string.format(
-                    '(%s): Moved `%s` from index `%d` to `%d`',
-                    _NAME,
-                    pathstr,
-                    old_idx,
-                    index
-                ),
-                INFO,
-                {
-                    title = 'User API - register_plugin()',
-                    animate = true,
-                    timeout = 1050,
-                    hide_from_history = false,
-                }
+                fmt('(%s): Moved `%s` from index `%d` to `%d`', _NAME, pathstr, old_idx, index),
+                INFO
             )
         end
 
         return
     end
 
-    ---@type string|nil
-    local warning = nil
-    local len = #User.registered_plugins
-
-    if index >= 1 and index <= len then
+    if index >= 1 and index <= #User.registered_plugins then
         table.insert(User.registered_plugins, index, pathstr)
-    elseif index == 0 then
-        table.insert(User.registered_plugins, pathstr)
-    elseif index < 0 or index > len then
-        warning = 'Invalid index, appending instead'
-        table.insert(User.registered_plugins, pathstr)
-    end
-
-    if warning == nil then
         return
     end
 
-    vim.notify(warning, WARN)
+    if index < 0 or index > #User.registered_plugins then
+        vim.notify('Invalid index, appending instead', WARN)
+    end
+    table.insert(User.registered_plugins, pathstr)
 end
 
 ---@param pathstr string The path of the plugin to be de-registered
 function User.deregister_plugin(pathstr)
-    local Value = User.check.value
-
-    local type_not_empty = Value.type_not_empty
-
-    if not type_not_empty('string', pathstr) then
-        return
-    end
+    validate('pathstr', pathstr, 'string', false)
 
     if not in_tbl(User.registered_plugins, pathstr) then
         return
@@ -150,7 +128,7 @@ function User.print_loaded_plugins()
     local msg = ''
 
     for _, v in next, User.registered_plugins do
-        msg = string.format('%s\n%s', msg, v)
+        msg = fmt('%s\n%s', msg, v)
     end
 
     vim.notify(msg, INFO)
@@ -158,10 +136,11 @@ end
 
 function User.setup_maps()
     local Keymaps = User.config.keymaps
-    local desc = User.maps.kmap.desc
+    local desc = User.maps.desc
     local type_not_empty = User.check.value.type_not_empty
     local displace_letter = User.util.displace_letter
     local replace = User.util.string.replace
+    local is_dir = User.check.exists.vim_isdir
 
     if not type_not_empty('table', User.registered_plugins) then
         return
@@ -173,12 +152,7 @@ function User.setup_maps()
         local fpath = vim.fn.stdpath('config') .. '/lua/plugin'
         if v:sub(1, 7) == 'plugin.' then
             v = fpath .. replace(v:sub(7), '.', '/')
-
-            if vim.fn.isdirectory(v) == 1 then
-                v = v .. '/init.lua'
-            else
-                v = v .. '.lua'
-            end
+            v = v .. (is_dir(v) and '/init.lua' or '.lua')
 
             table.insert(User.paths, v)
         end
@@ -204,7 +178,7 @@ function User.setup_maps()
         }
 
         if cycle == 9 then
-            group = displace_letter(group, 'next', false)
+            group = displace_letter(group, 'next')
             cycle = 1
         elseif cycle < 9 then
             cycle = cycle + 1
@@ -216,8 +190,13 @@ function User.setup_maps()
     Keymaps({ n = Keys })
 end
 
-function User.setup()
-    local desc = User.maps.kmap.desc
+---@param opts? table
+function User.setup(opts)
+    validate('opts', opts, 'table', true)
+
+    opts = opts or {} -- luacheck: ignore
+
+    local desc = User.maps.desc
     local insp = inspect or vim.inspect
 
     ---@type AllMaps
@@ -264,15 +243,6 @@ function User.setup()
     User.config.neovide.setup()
 end
 
-local M = setmetatable(User, {
-    __index = User,
-
-    ---@diagnostic disable-next-line:unused-local
-    __newindex = function(self, k, v)
-        error('User API is Read-Only!', ERROR)
-    end,
-})
-
-return M
+return User
 
 --- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:
