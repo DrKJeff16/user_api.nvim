@@ -327,8 +327,7 @@ Keymaps.Keys = {
                 local bufnr = curr_buf()
 
                 if not opt_get('modifiable', { buf = bufnr }) then
-                    vim.notify('Unable to indent. File is not modifiable!', ERROR)
-                    return
+                    error('Unable to indent. File is not modifiable!', ERROR)
                 end
 
                 local win = vim.api.nvim_get_current_win()
@@ -337,9 +336,9 @@ Keymaps.Keys = {
                 vim.api.nvim_feedkeys('gg=G', 'n', false)
 
                 -- HACK: Wait for `feedkeys` to end, then reset to position
-                -- vim.schedule(function()
-                cursor_set(win, saved_pos)
-                -- end)
+                vim.schedule(function()
+                    cursor_set(win, saved_pos)
+                end)
             end,
             desc('Indent Whole File'),
         },
@@ -892,7 +891,7 @@ local M = setmetatable({}, {
         ---@type AllModeMaps
         local parsed_keys = {}
 
-        for k, v in next, keys do
+        for k, v in pairs(keys) do
             if not in_tbl(MODES, k) then
                 vim.notify(fmt('Ignoring badly formatted table\n`%s`', insp(keys)), WARN)
             else
@@ -905,7 +904,7 @@ local M = setmetatable({}, {
         end
 
         -- Noop keys after `<leader>` to avoid accidents
-        for _, mode in next, MODES do
+        for _, mode in ipairs(MODES) do
             if Keymaps.no_oped then
                 break
             end
@@ -928,4 +927,4 @@ local M = setmetatable({}, {
 
 return M
 
---- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:
+--- vim:ts=4:sts=4:sw=4:et:ai:si:sta:
