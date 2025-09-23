@@ -40,8 +40,8 @@ local g_opts = {
 
     cursor = {
         hack = false,
-        animation_length = 0.1,
-        short_animation_length = 0.05,
+        animation_length = 0.05,
+        short_animation_length = 0.03,
 
         trail_size = 1.0,
 
@@ -52,8 +52,8 @@ local g_opts = {
         },
 
         animate = {
-            in_insert_mode = true,
-            command_line = true,
+            in_insert_mode = false,
+            command_line = false,
         },
     },
 
@@ -78,7 +78,7 @@ local g_opts = {
 
     position = {
         animation = {
-            length = 0.15,
+            length = 0.1,
         },
     },
 
@@ -293,4 +293,4 @@ return setmetatable({}, {
     end,
 })
 
---- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:
+--- vim:ts=4:sts=4:sw=4:et:ai:si:sta:ci:pi:

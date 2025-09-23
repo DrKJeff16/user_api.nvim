@@ -58,7 +58,7 @@ local M = setmetatable({}, {
     __index = Termux,
 
     __newindex = function(_, _, _)
-        error('This module is read-only!', ERROR)
+        error('User.Distro.Termux is Read-Only!', ERROR)
     end,
 
     ---@param self User.Distro.Termux
@@ -79,4 +79,4 @@ local M = setmetatable({}, {
 
 return M
 
---- vim:ts=4:sts=4:sw=4:et:ai:si:sta:noci:nopi:
+--- vim:ts=4:sts=4:sw=4:et:ai:si:sta:ci:pi:
