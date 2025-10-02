@@ -1,17 +1,14 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
-        verbose: true
-      - id: trailing-whitespace
-        verbose: true
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.5.5
     hooks:
       - id: remove-crlf
-        verbose: true
+      - id: forbid-crlf  # Forbid files containing CRLF end-lines to be committed
 
   - repo: local
     hooks:
@@ -19,5 +16,12 @@ repos:
         name: StyLua
         language: system
         entry: stylua
+        types: [lua]
+        verbose: true
+
+      - id: selene
+        name: Selene
+        language: system
+        entry: selene
         types: [lua]
         verbose: true
