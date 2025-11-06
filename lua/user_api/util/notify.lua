@@ -69,7 +69,6 @@ Notify.Levels = {
 ---@param msg string
 ---@param lvl? NotifyLvl|VimNotifyLvl
 ---@param opts? notify.Options
----@return function
 function Notify.notify(msg, lvl, opts)
     if vim.fn.has('nvim-0.11') == 1 then
         vim.validate('msg', msg, 'string', false)
@@ -90,15 +89,15 @@ function Notify.notify(msg, lvl, opts)
         if type(lvl) == 'number' then
             lvl = math.floor(lvl)
             lvl = (lvl <= OFF and lvl >= TRACE) and Notify.Levels[lvl] or Notify.Levels[INFO]
-        elseif not vim.tbl_contains(Notify.Levels, string.lower(lvl)) then
+        elseif not vim.tbl_contains(Notify.Levels, lvl:lower()) then
             lvl = Notify.Levels[INFO]
         end
 
         opts = vim.tbl_deep_extend('keep', opts, Notify.Opts)
     else
         if type(lvl) == 'string' then
-            if vim.tbl_contains(Notify.Levels, string.lower(lvl)) then
-                lvl = Notify.Levels[string.upper(lvl)]
+            if vim.tbl_contains(Notify.Levels, lvl:lower()) then
+                lvl = Notify.Levels[lvl:upper()]
             end
         elseif type(lvl) == 'number' then
             if lvl < TRACE or lvl > OFF then
@@ -108,20 +107,13 @@ function Notify.notify(msg, lvl, opts)
             lvl = INFO
         end
     end
-
-    local fn = vim.schedule_wrap(function()
-        vim.notify(msg, lvl, opts)
-    end)
-    fn()
-
-    return fn
+    vim.notify(msg, lvl, opts)
 end
 
 ---@param lvl VimNotifyLvl
 ---@return fun(args: vim.api.keyset.create_user_command.command_args)
 local function gen_cmd_lvl(lvl)
     return function(args) ---@param args vim.api.keyset.create_user_command.command_args
-        local notify = Notify.notify
         local data = args.args
         if data == '' then
             return
@@ -132,7 +124,7 @@ local function gen_cmd_lvl(lvl)
             timeout = 1750,
             hide_from_history = args.bang,
         }
-        notify(data, lvl, opts)
+        Notify.notify(data, lvl, opts)
     end
 end
 
