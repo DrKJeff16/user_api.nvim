@@ -2,12 +2,9 @@ local VIMRC = vim.fn.stdpath('config') .. '/init.lua'
 local ERROR = vim.log.levels.ERROR
 local WARN = vim.log.levels.WARN
 local INFO = vim.log.levels.INFO
-local nop = require('user_api.maps').nop
 local desc = require('user_api.maps').desc
-local ft_get = require('user_api.util').ft_get
 local curr_buf = vim.api.nvim_get_current_buf
 local in_list = vim.list_contains
-local optset = vim.api.nvim_set_option_value
 
 local function rcfile_ed()
     vim.cmd.edit(VIMRC)
@@ -48,10 +45,10 @@ local function gen_fun_blank(vertical)
         vim.api.nvim_set_current_win(win)
 
         local set_opts = { buf = buf } ---@type vim.api.keyset.option
-        optset('filetype', '', set_opts)
-        optset('buftype', '', set_opts)
-        optset('modifiable', true, set_opts)
-        optset('modified', false, set_opts)
+        vim.api.nvim_set_option_value('filetype', '', set_opts)
+        vim.api.nvim_set_option_value('buftype', '', set_opts)
+        vim.api.nvim_set_option_value('modifiable', true, set_opts)
+        vim.api.nvim_set_option_value('modified', false, set_opts)
     end
 end
 
@@ -68,7 +65,8 @@ local function buf_del(force)
     local pre_exc = { ft = { 'help', 'lazy', 'man', 'noice' }, bt = { 'help' } }
     return function()
         local buf = curr_buf()
-        local prev_ft, prev_bt = ft_get(buf), require('user_api.util').bt_get(buf)
+        local prev_ft, prev_bt =
+            require('user_api.util').ft_get(buf), require('user_api.util').bt_get(buf)
         if not force then
             force = prev_bt == 'terminal'
         end
@@ -78,7 +76,7 @@ local function buf_del(force)
             return
         end
 
-        if in_list(ft_triggers, ft_get(curr_buf())) then
+        if in_list(ft_triggers, require('user_api.util').ft_get(curr_buf())) then
             vim.cmd.bprevious()
         end
     end
@@ -184,14 +182,14 @@ Keymaps.Keys = { ---@type AllModeMaps
         ['<leader>Hmx'] = { ':horizontal Man<CR>', desc('Open Man Page (Horizontal)') },
         ['<leader>wN'] = {
             function()
-                local ft = ft_get(curr_buf())
                 vim.cmd.wincmd('n')
                 vim.cmd.wincmd('o')
 
                 local opts = { buf = curr_buf() }
-                optset('ft', ft, opts)
-                optset('modifiable', true, opts)
-                optset('modified', false, opts)
+                local ft = require('user_api.util').ft_get(curr_buf())
+                vim.api.nvim_set_option_value('ft', ft, opts)
+                vim.api.nvim_set_option_value('modifiable', true, opts)
+                vim.api.nvim_set_option_value('modified', false, opts)
             end,
             desc('New Blank File'),
         },
@@ -280,6 +278,7 @@ function Keymaps.set_leader(leader, local_leader, force)
         return
     end
 
+    local nop = require('user_api.maps').nop
     local vim_vars = { leader = '', localleader = '' }
     if leader:lower() == '<space>' then
         vim_vars.leader = ' '
@@ -399,7 +398,12 @@ local M = setmetatable({}, {
                 break
             end
             if in_list({ 'n', 'v' }, mode) then
-                nop(Keymaps.NOP, { noremap = false, silent = true }, mode, '<leader>')
+                require('user_api.maps').nop(
+                    Keymaps.NOP,
+                    { noremap = false, silent = true },
+                    mode,
+                    '<leader>'
+                )
             end
         end
 

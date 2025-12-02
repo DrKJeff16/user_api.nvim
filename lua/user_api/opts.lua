@@ -1,4 +1,3 @@
-local MODSTR = 'user_api.opts'
 local ERROR = vim.log.levels.ERROR
 local INFO = vim.log.levels.INFO
 local deep_extend = vim.tbl_deep_extend
@@ -8,12 +7,18 @@ local copy = vim.deepcopy
 
 local Value = require('user_api.check.value')
 
-local Opts = {} ---@class User.Opts
-
----@return User.Opts.AllOpts
-function Opts.get_all_opts()
-    return require('user_api.opts.all_opts')
-end
+---@class User.Opts
+local Opts = {
+    ---@return User.Opts.AllOpts opts
+    get_all_opts = function()
+        return require('user_api.opts.all_opts')
+    end,
+    options = {},
+    ---@return User.Opts.Spec defaults
+    get_defaults = function()
+        return require('user_api.opts.config')
+    end,
+}
 
 ---@param ArgLead string
 ---@param CursorPos integer
@@ -57,19 +62,12 @@ end
 
 Opts.toggleable = Opts.gen_toggleable()
 
----@return User.Opts.Spec defaults
-function Opts.get_defaults()
-    return require('user_api.opts.config')
-end
-
-Opts.options = {} ---@type User.Opts.Spec
-
 ---@param T User.Opts.Spec
 ---@param verbose? boolean
 ---@return User.Opts.Spec parsed_opts
 function Opts.long_opts_convert(T, verbose)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('T', T, 'table', false)
+        vim.validate('T', T, { 'table' }, false)
         vim.validate('verbose', verbose, { 'boolean', 'nil' }, true)
     else
         vim.validate({
@@ -252,7 +250,7 @@ end
 local M = setmetatable(Opts, { ---@type User.Opts|fun(override?: User.Opts.Spec, verbose?: boolean)
     __index = Opts,
     __newindex = function()
-        vim.notify(('(%s): This module is read only!'):format(MODSTR), ERROR)
+        vim.notify('User.Opts is Read-Only!', ERROR)
     end,
     ---@param self User.Opts
     ---@param override? User.Opts.Spec A table with custom options
