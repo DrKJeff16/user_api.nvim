@@ -3,18 +3,16 @@
 
 local WARN = vim.log.levels.WARN
 local ERROR = vim.log.levels.ERROR
+local in_list = vim.list_contains
 
-local in_tbl = vim.tbl_contains
-
-local function is_dir(dir)
+local function is_dir(dir) ---@param dir string
     return vim.fn.isdirectory(dir) == 1
 end
 
 ---@class User.Distro.Archlinux
 local Archlinux = {}
 
----@type string[]
-local RTPATHS = {
+local RTPATHS = { ---@type string[]
     '/usr/share/vim/vimfiles/after',
     '/usr/share/vim/vimfiles',
     '/usr/share/nvim/runtime',
@@ -23,60 +21,47 @@ local RTPATHS = {
     '/usr/local/share/nvim/runtime',
 }
 
----@type string[]
-Archlinux.rtpaths = setmetatable(RTPATHS, {
+Archlinux.rtpaths = setmetatable(RTPATHS, { ---@type string[]
     __index = RTPATHS,
-
-    __newindex = function(_, _, _)
-        error('User.Distro.Archlinux.RTP table is Read-Only!', ERROR)
+    __newindex = function()
+        vim.notify('User.Distro.Archlinux.RTP table is Read-Only!', ERROR)
     end,
 })
 
----@return boolean
 function Archlinux.validate()
-    local type_not_empty = require('user_api.check.value').type_not_empty
-    local new_rtpaths = {} ---@type string[]
-
     -- First check for each dir's existance
+    local new_rtpaths = {} ---@type string[]
     for _, p in ipairs(Archlinux.rtpaths) do
-        if vim.fn.isdirectory(p) == 1 and not in_tbl(new_rtpaths, p) then
+        if vim.fn.isdirectory(p) == 1 and not in_list(new_rtpaths, p) then
             table.insert(new_rtpaths, p)
         end
     end
 
     -- If no dirs...
-    if not type_not_empty('table', new_rtpaths) then
+    if not require('user_api.check.value').type_not_empty('table', new_rtpaths) then
         return false
     end
 
     Archlinux.rtpaths = vim.deepcopy(new_rtpaths)
-
     return true
 end
 
----@type User.Distro.Archlinux|fun()
-local M = setmetatable({}, {
+local M = setmetatable({}, { ---@type User.Distro.Archlinux|function
     __index = Archlinux,
-    __newindex = function(_, _, _)
-        error('User.Distro.Archlinux table is Read-Only!', ERROR)
+    __newindex = function()
+        vim.notify('User.Distro.Archlinux table is Read-Only!', ERROR)
     end,
-    ---@param self User.Distro.Archlinux
-    __call = function(self)
-        if not Archlinux.validate() then
+    __call = function(self) ---@param self User.Distro.Archlinux
+        if not self.validate() then
             return
         end
-
         for _, path in ipairs(self.rtpaths) do
             if is_dir(path) then
-                vim.go.rtp = vim.go.rtp .. ',' .. path
+                vim.o.runtimepath = vim.o.runtimepath .. ',' .. path
             end
         end
-
-        local ok = pcall(vim.cmd.runtime, { 'archlinux.vim', bang = true })
-
-        if not ok then
+        if not pcall(vim.cmd.runtime, { 'archlinux.vim', bang = true }) then
             vim.notify('Bad setup for Arch Linux!', WARN)
-            return
         end
     end,
 })

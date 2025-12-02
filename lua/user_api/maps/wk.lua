@@ -15,7 +15,7 @@
 ---@field [1] string
 --- AKA `rhs` of a Vim Keymap.
 ---
----@field [2] string|fun()
+---@field [2] string|function
 ---@field [3]? User.Maps.Opts
 --- Keymap's description.
 ---
@@ -130,19 +130,16 @@ function WK.available()
 end
 
 ---@param lhs string
----@param rhs string|fun()
+---@param rhs string|function
 ---@param opts? User.Maps.Opts|vim.keymap.set.Opts|RegPfx
 ---@return RegKey|RegPfx
 function WK.convert(lhs, rhs, opts)
     if not WK.available() then
         error('(user.maps.wk.convert): `which_key` not available', WARN)
     end
-
     opts = is_tbl(opts) and opts or {}
 
-    ---@type RegKey|RegPfx
-    local res = { lhs, rhs }
-
+    local res = { lhs, rhs } ---@type RegKey|RegPfx
     if is_bool(opts.hidden) then
         res.hidden = opts.hidden
     end
@@ -162,50 +159,55 @@ end
 ---@param T AllMaps
 ---@return AllMaps res
 function WK.convert_dict(T)
-    ---@type RegKeys
-    local res = {}
-
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('T', T, 'table', false, 'AllMaps')
+    else
+        vim.validate({ T = { T, { 'table' } } })
+    end
+    local res = {} ---@type RegKeys
     for lhs, v in pairs(T) do
-        ---@type string|fun()
-        local rhs = v[1]
-
-        ---@type User.Maps.Opts
-        local opts = is_tbl(v[2]) and v[2] or {}
-
+        local rhs = v[1] ---@type string|function
+        local opts = is_tbl(v[2]) and v[2] or {} ---@type User.Maps.Opts
         table.insert(res, WK.convert(lhs, rhs, opts))
     end
-
     return res
 end
 
 ---@param T AllMaps
 ---@param opts? RegPfx|User.Maps.Opts
----@return false?
+---@return false|nil
 function WK.register(T, opts)
-    vim.validate('T', T, 'table', false, 'AllMaps')
-    vim.validate('opts', opts, 'table', true, 'RegPfx|User.Maps.Opts')
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('T', T, { 'table' }, false, 'AllMaps')
+        vim.validate('opts', opts, { 'table', 'nil' }, true, 'RegPfx|User.Maps.Opts')
+    else
+        vim.validate({
+            T = { T, { 'table' } },
+            opts = { opts, { 'table', 'nil' }, true },
+        })
+    end
 
     if not WK.available() then
         vim.notify('(user.maps.wk.register): `which_key` unavailable', ERROR)
         return false
     end
 
-    local WKEY = require('which-key')
-
     opts = opts or O.new({ mode = 'n' })
-
     opts.mode = (is_str(opts.mode) and vim.list_contains(MODES, opts.mode)) and opts.mode or 'n'
 
-    ---@type (KeyMapRhsArr|AllMaps|AllModeMaps)[]
-    local filtered = {}
-
+    local filtered = {} ---@type (KeyMapRhsArr|AllMaps|AllModeMaps)[]
     for _, val in pairs(T) do
         table.insert(filtered, val)
     end
-
-    WKEY.add(filtered)
+    require('which-key').add(filtered)
 end
 
-return WK
+local M = setmetatable(WK, { ---@type User.Maps.WK
+    __index = WK,
+    __newindex = function()
+        vim.notify('User.Maps.WK is Read-Only!', ERROR)
+    end,
+})
 
+return M
 --- vim:ts=4:sts=4:sw=4:et:ai:si:sta:

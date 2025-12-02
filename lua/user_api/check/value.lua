@@ -6,11 +6,9 @@ local ERROR = vim.log.levels.ERROR
 local WARN = vim.log.levels.WARN
 local tbl_isempty = vim.tbl_isempty
 local in_list = vim.list_contains
-local floor = math.floor
-local ceil = math.ceil
 
 ---@param t Types
----@return fun(var: any, multiple: boolean?): boolean
+---@return fun(var: any, multiple?: boolean): boolean
 local function type_fun(t)
     local ALLOWED_TYPES = {
         is_bool = 'boolean',
@@ -37,9 +35,9 @@ local function type_fun(t)
     ---@param multiple? boolean
     return function(var, multiple)
         if vim.fn.has('nvim-0.11') == 1 then
-            vim.validate('multiple', multiple, 'boolean', true)
+            vim.validate('multiple', multiple, { 'boolean', 'nil' }, true)
         else
-            vim.validate({ multiple = { multiple, { 'boolean', 'nil' } } })
+            vim.validate({ multiple = { multiple, { 'boolean', 'nil' }, true } })
         end
         multiple = multiple ~= nil and multiple or false
         if not multiple then
@@ -99,24 +97,22 @@ Value.is_tbl = type_fun('table')
 ---@return boolean
 function Value.is_int(var, multiple)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('multiple', multiple, 'boolean', true)
+        vim.validate('multiple', multiple, { 'boolean', 'nil' }, true)
     else
-        vim.validate({ multiple = { multiple, { 'boolean', 'nil' } } })
+        vim.validate({ multiple = { multiple, { 'boolean', 'nil' }, true } })
     end
     multiple = multiple ~= nil and multiple or false
 
-    local is_tbl = Value.is_tbl
-    local is_num = Value.is_num
     if not multiple then
-        return is_num(var) and var >= 0 and (var == floor(var) or var == ceil(var))
+        return Value.is_num(var) and var >= 0 and (var == math.floor(var) or var == math.ceil(var))
     end
-    if not is_tbl(var) then
+    if not Value.is_tbl(var) then
         vim.notify(('(%s.is_int): Input is not a table (`multiple` is true)'):format(MODSTR), WARN)
         return false
     end
 
     for _, v in ipairs(var) do
-        if not (is_num(v) and v >= 0 and (v == floor(v) or v == ceil(v))) then
+        if not (Value.is_num(v) and v >= 0 and (v == math.floor(v) or v == math.ceil(v))) then
             return false
         end
     end
@@ -141,21 +137,19 @@ end
 function Value.empty(data, multiple)
     if vim.fn.has('nvim-0.11') == 1 then
         vim.validate('data', data, { 'string', 'table', 'number' }, false)
-        vim.validate('multiple', multiple, 'boolean', true, 'boolean?')
+        vim.validate('multiple', multiple, { 'boolean', 'nil' }, true)
     else
         vim.validate({
             data = { data, { 'string', 'table', 'number' } },
-            multiple = { multiple, { 'boolean', 'nil' } },
+            multiple = { multiple, { 'boolean', 'nil' }, true },
         })
     end
     multiple = multiple ~= nil and multiple or false
 
-    local is_str = Value.is_str
-    local is_num = Value.is_num
-    if is_str(data) then
+    if Value.is_str(data) then
         return data == ''
     end
-    if is_num(data) then
+    if Value.is_num(data) then
         return data == 0
     end
     if not multiple then
@@ -183,13 +177,21 @@ end
 ---@param eq? { low: boolean, high: boolean } A table that defines how equalities will be made
 ---@return boolean
 function Value.num_range(num, low, high, eq)
-    local is_num = Value.is_num
-    local type_not_empty = Value.type_not_empty
-    if not is_num({ num, low, high }, true) then
-        error(('(%s.num_range): One argument is not a number'):format(MODSTR), ERROR)
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('num', num, { 'number' }, false)
+        vim.validate('low', low, { 'number' }, false)
+        vim.validate('high', high, { 'number' }, false)
+        vim.validate('eq', eq, { 'table', 'nil' }, true)
+    else
+        vim.validate({
+            num = { num, { 'number' } },
+            low = { low, { 'number' } },
+            high = { high, { 'number' } },
+            eq = { eq, { 'table', 'nil' }, true },
+        })
     end
 
-    eq = type_not_empty('table', eq) and eq or { low = true, high = true }
+    eq = Value.type_not_empty('table', eq) and eq or { low = true, high = true }
     eq.high = Value.is_bool(eq.high) and eq.high or true
     eq.low = Value.is_bool(eq.low) and eq.low or true
     if low > high then
@@ -210,27 +212,33 @@ function Value.num_range(num, low, high, eq)
             return num > low and num < high
         end,
     }
-    local func
     if eq.high and eq.low then
-        func = Comps.high_low
-    elseif eq.high and not eq.low then
-        func = Comps.high_no_low
-    elseif not eq.high and eq.low then
-        func = Comps.low_no_high
-    else
-        func = Comps.none
+        return Comps.high_low()
     end
-    return func()
+    if eq.high and not eq.low then
+        return Comps.high_no_low()
+    end
+    if not eq.high and eq.low then
+        return Comps.low_no_high()
+    end
+    return Comps.none()
 end
 
 ---@param field (string|integer)[]|string|integer
 ---@param T table<string|integer, any>
 ---@return boolean
 function Value.fields(field, T)
-    local is_tbl = Value.is_tbl
-    vim.validate('field', field, { 'string', 'number', 'table' }, true)
-    vim.validate('T', T, 'table', false)
-    if not is_tbl(field) then
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('field', field, { 'string', 'number', 'table', 'nil' }, true)
+        vim.validate('T', T, 'table', false)
+    else
+        vim.validate({
+            field = { field, { 'string', 'number', 'table', 'nil' }, true },
+            T = { T, { 'table' } },
+        })
+    end
+
+    if not Value.is_tbl(field) then
         return T[field] ~= nil
     end
     for _, v in ipairs(field) do
@@ -246,15 +254,22 @@ end
 ---@param return_keys? boolean
 ---@return boolean|string|integer|(string|integer)[] res
 function Value.tbl_values(values, T, return_keys)
-    vim.validate('values', values, 'table', false, 'any[]|table<string, any>')
-    vim.validate('T', T, 'table', false)
-    vim.validate('return_keys', return_keys, 'boolean', true)
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('values', values, { 'table' }, false, 'any[]|table<string, any>')
+        vim.validate('T', T, { 'table' }, false)
+        vim.validate('return_keys', return_keys, { 'boolean', 'nil' }, true)
+    else
+        vim.validate({
+            values = { values, { 'table' } },
+            T = { T, { 'table' } },
+            return_keys = { return_keys, { 'boolean', 'nil' }, true },
+        })
+    end
     return_keys = return_keys ~= nil and return_keys or false
 
-    ---@type boolean|string|integer|(string|integer)[]
-    local res = return_keys and {} or false
-    for _, val in next, values do
-        for k, v in next, T do
+    local res = return_keys and {} or false ---@type boolean|string|integer|(string|integer)[]
+    for _, val in pairs(values) do
+        for k, v in pairs(T) do
             if return_keys and v == val then
                 table.insert(res, k)
             elseif not return_keys and v == val then
@@ -269,43 +284,33 @@ function Value.tbl_values(values, T, return_keys)
         end
     end
     if return_keys then
-        if #res == 1 then
-            res = res[1]
-        elseif Value.empty(res) then
-            res = false
-        end
+        res = #res == 1 and res[1] or (Value.empty(res) and false or res)
     end
     return res
 end
 
 ---@param type_str Types
 ---@param T table
----@return boolean
+---@return boolean is_single_type
 function Value.single_type_tbl(type_str, T)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate(
-            'type_str',
-            type_str,
-            'string',
-            false,
-            "'boolean'|'function'|'number'|'string'|'table'"
-        )
-        vim.validate('T', T, 'table', false)
+        vim.validate('type_str', type_str, { 'string' }, false)
+        vim.validate('T', T, { 'table' }, false)
     else
         vim.validate({
-            type_str = { type_str, 'string' },
-            T = { T, 'table' },
+            type_str = { type_str, { 'string' } },
+            T = { T, { 'table' } },
         })
     end
     if not in_list({ 'boolean', 'function', 'number', 'string', 'table' }, type_str) then
         error(('(%s.single_type_tbl): Wrong type `%s`.'):format(MODSTR, type_str))
     end
-    if vim.tbl_isempty(T) then
+    if tbl_isempty(T) then
         vim.notify(('(%s.single_type_tbl): Expected a non-empty table!'):format(MODSTR), ERROR)
         return false
     end
 
-    for _, v in next, T do
+    for _, v in pairs(T) do
         if (type_str == 'nil' and v ~= nil) or type(v) ~= type_str then
             return false
         end
@@ -321,12 +326,12 @@ end
 --- ---
 ---@param type_str EmptyTypes
 ---@param data any
----@return boolean
+---@return boolean result
 function Value.type_not_empty(type_str, data)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('type_str', type_str, 'string', false, 'EmptyTypes')
+        vim.validate('type_str', type_str, { 'string' }, false)
     else
-        vim.validate({ type_str = { type_str, 'string' } })
+        vim.validate({ type_str = { type_str, { 'string' } } })
     end
     if not in_list({ 'integer', 'number', 'string', 'table' }, type_str) then
         error(('(%s.type_not_empty): Invalid type `%s`!'):format(MODSTR, type_str))
@@ -344,9 +349,7 @@ function Value.type_not_empty(type_str, data)
     if not in_list(vim.tbl_keys(valid_types), type_str) then
         return false
     end
-
-    local checker = valid_types[type_str]
-    return checker(data) and not Value.empty(data)
+    return valid_types[type_str](data) and not Value.empty(data)
 end
 
 ---Checks whether a certain `num` does not exceed table index range
@@ -359,25 +362,24 @@ end
 ---@return boolean
 function Value.in_tbl_range(index, T)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('index', index, 'number', false, 'integer')
-        vim.validate('T', T, 'table', false)
+        vim.validate('index', index, { 'number' }, false, 'integer')
+        vim.validate('T', T, { 'table' }, false)
     else
         vim.validate({
-            index = { index, 'number' },
-            T = { T, 'table' },
+            index = { index, { 'number' } },
+            T = { T, { 'table' } },
         })
     end
-    if vim.tbl_isempty(T) then
+    if tbl_isempty(T) then
         return false
     end
     return index >= 1 and index <= #T
 end
 
----@type User.Check.Value
-local M = setmetatable(Value, {
+local M = setmetatable(Value, { ---@type User.Check.Value
     __index = Value,
-    __newindex = function(_, _, _)
-        error('User.Check.Value table is Read-Only!', ERROR)
+    __newindex = function()
+        vim.notify('User.Check.Value table is Read-Only!', ERROR)
     end,
 })
 

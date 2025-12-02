@@ -1,7 +1,7 @@
 --- Modify runtimepath to also search the system-wide Vim directory
 -- (eg. for Vim runtime files from Termux packages)
 
-local function is_dir(dir)
+local function is_dir(dir) ---@param dir string
     return vim.fn.isdirectory(dir) == 1
 end
 
@@ -41,11 +41,10 @@ function Termux.validate()
     return true
 end
 
----@type User.Distro.Termux|fun()
-local M = setmetatable({}, {
+local M = setmetatable({}, { ---@type User.Distro.Termux|function
     __index = Termux,
-    __newindex = function(_, _, _)
-        error('User.Distro.Termux is Read-Only!', ERROR)
+    __newindex = function()
+        vim.notify('User.Distro.Termux is Read-Only!', ERROR)
     end,
     __call = function(self) ---@param self User.Distro.Termux
         if not (Termux.validate() and is_dir(Termux.PREFIX)) then
@@ -53,7 +52,7 @@ local M = setmetatable({}, {
         end
         for _, path in ipairs(self.rtpaths) do
             if is_dir(path) == 1 then
-                vim.go.rtp = vim.go.rtp .. ',' .. path
+                vim.o.rtp = vim.o.rtp .. ',' .. path
             end
         end
         vim.api.nvim_set_option_value('wrap', true, { scope = 'global' })

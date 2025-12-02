@@ -1,28 +1,30 @@
 ---@class UserAPI
----@field FAILED? string[]
----@field paths? string[]
-local User = {}
-
-User.util = require('user_api.util')
-User.check = require('user_api.check')
-User.distro = require('user_api.distro')
-User.maps = require('user_api.maps')
-User.opts = require('user_api.opts')
-User.commands = require('user_api.commands')
-User.update = require('user_api.update')
-User.highlight = require('user_api.highlight')
-User.config = require('user_api.config')
+local User = {
+    opts = require('user_api.opts'),
+    distro = require('user_api.distro'),
+    config = require('user_api.config'),
+}
 
 function User.setup()
-    User.config.keymaps({ n = { ['<leader>U'] = { group = '+User API' } } })
-    User.commands.setup()
-    User.update.setup()
-    User.opts.setup_maps()
-    User.opts.setup_cmds()
-    User.util.setup_autocmd()
+    require('user_api.commands').setup()
+    require('user_api.update').setup()
+
+    User.opts.setup()
     User.distro()
+
+    require('user_api.util').setup_autocmd()
+
     User.config.neovide.setup()
+
+    User.config.keymaps({ n = { ['<leader>U'] = { group = '+User API' } } })
 end
 
-return User
+local M = setmetatable(User, { ---@type UserAPI
+    __index = User,
+    __newindex = function()
+        vim.notify('User API is Read-Only!', vim.log.levels.ERROR)
+    end,
+})
+
+return M
 --- vim:ts=4:sts=4:sw=4:et:ai:si:sta:
