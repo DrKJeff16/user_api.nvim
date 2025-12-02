@@ -3,7 +3,7 @@ local ERROR = vim.log.levels.ERROR
 
 ---Helper function for transparency formatting.
 --- ---
----@return string alpha
+---@return string
 local function alpha()
     return ('%x'):format(math.floor(255 * (vim.g.transparency or 1.0)))
 end
@@ -59,27 +59,31 @@ local o_opts = { linespace = 0, guifont = 'FiraCode Nerd Font Mono:h19' }
 ---@field o Config.Neovide.Opts.O
 
 ---@class User.Config.Neovide
-local Neovide = {
-    active = false,
-    g_opts = {}, ---@type table<string, any>
-    ---@return boolean active
-    check = function()
-        return require('user_api.check.exists').executable('neovide') and vim.g.neovide
-    end,
-    ---@return Config.Neovide.Opts defaults
-    get_defaults = function()
-        return { g = g_opts, o = o_opts }
-    end,
-}
+local Neovide = {}
+
+---@type table<string, any>
+Neovide.g_opts = {}
+
+Neovide.active = false
+
+---@return Config.Neovide.Opts
+function Neovide.get_defaults()
+    return { g = g_opts, o = o_opts }
+end
+
+---@return boolean active
+function Neovide.check()
+    return require('user_api.check.exists').executable('neovide') and vim.g.neovide
+end
 
 ---@param opacity? number
 ---@param transparency? number
 ---@param bg? string
 function Neovide.set_transparency(opacity, transparency, bg)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('opacity', opacity, { 'number', 'nil' }, true)
-        vim.validate('transparency', transparency, { 'number', 'nil' }, true)
-        vim.validate('bg', bg, { 'string', 'nil' }, true)
+        vim.validate('opacity', opacity, 'number', true)
+        vim.validate('transparency', transparency, 'number', true)
+        vim.validate('bg', bg, 'string', true)
     else
         vim.validate({
             opacity = { opacity, { 'number', 'nil' } },

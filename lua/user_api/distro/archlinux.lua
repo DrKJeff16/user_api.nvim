@@ -49,7 +49,7 @@ end
 local M = setmetatable({}, { ---@type User.Distro.Archlinux|function
     __index = Archlinux,
     __newindex = function()
-        vim.notify('User.Distro.Archlinux is Read-Only!', ERROR)
+        vim.notify('User.Distro.Archlinux table is Read-Only!', ERROR)
     end,
     __call = function(self) ---@param self User.Distro.Archlinux
         if not self.validate() then

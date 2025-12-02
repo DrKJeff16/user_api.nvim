@@ -1,16 +1,18 @@
 --- Modify runtimepath to also search the system-wide Vim directory
 -- (eg. for Vim runtime files from Termux packages)
 
----@param dir string
-local function is_dir(dir)
+local function is_dir(dir) ---@param dir string
     return vim.fn.isdirectory(dir) == 1
 end
 
----@class User.Distro.Termux
-local Termux = {
-    PREFIX = vim.fn.has_key(vim.fn.environ(), 'PREFIX') and vim.fn.environ().PREFIX or '', ---@type string|''
-}
+local ERROR = vim.log.levels.ERROR
+local environ = vim.fn.environ
+local copy = vim.deepcopy
 
+---@class User.Distro.Termux
+local Termux = {}
+
+Termux.PREFIX = vim.fn.has_key(environ(), 'PREFIX') and environ().PREFIX or '' ---@type string|''
 Termux.rtpaths = {
     ('%s/share/vim/vimfiles/after'):format(Termux.PREFIX),
     ('%s/share/vim/vimfiles'):format(Termux.PREFIX),
@@ -35,14 +37,14 @@ function Termux.validate()
         return false
     end
 
-    Termux.rtpaths = vim.deepcopy(new_rtpaths)
+    Termux.rtpaths = copy(new_rtpaths)
     return true
 end
 
 local M = setmetatable({}, { ---@type User.Distro.Termux|function
     __index = Termux,
     __newindex = function()
-        vim.notify('User.Distro.Termux is Read-Only!', vim.log.levels.ERROR)
+        vim.notify('User.Distro.Termux is Read-Only!', ERROR)
     end,
     __call = function(self) ---@param self User.Distro.Termux
         if not (Termux.validate() and is_dir(Termux.PREFIX)) then
