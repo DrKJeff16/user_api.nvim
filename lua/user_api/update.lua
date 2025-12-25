@@ -6,7 +6,7 @@ local uv = vim.uv or vim.loop
 
 ---@class User.Update
 local Update = {
-    ---@param verbose boolean|nil
+    ---@param verbose? boolean
     update = function(verbose)
         if vim.fn.has('nvim-0.11') == 1 then
             vim.validate('verbose', verbose, { 'boolean', 'nil' }, true)
@@ -93,4 +93,4 @@ local M = setmetatable(Update, { ---@type User.Update
 })
 
 return M
---- vim:ts=4:sts=4:sw=4:et:ai:si:sta:
+-- vim: set ts=4 sts=4 sw=4 et ai si sta:

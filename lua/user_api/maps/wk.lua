@@ -109,16 +109,9 @@
 
 local ERROR = vim.log.levels.ERROR
 local WARN = vim.log.levels.WARN
-
 local O = require('user_api.maps.objects')
-local Value = require('user_api.check.value')
-
-local is_tbl = Value.is_tbl
-local is_str = Value.is_str
-local is_bool = Value.is_bool
-local type_not_empty = Value.type_not_empty
-
 local MODES = { 'n', 'i', 'v', 't', 'o', 'x' }
+local in_list = vim.list_contains
 
 ---`which_key` API entrypoints.
 ---@class User.Maps.WK
@@ -134,22 +127,34 @@ end
 ---@param opts? User.Maps.Opts|vim.keymap.set.Opts|RegPfx
 ---@return RegKey|RegPfx
 function WK.convert(lhs, rhs, opts)
+    if vim.fn.has('nvim-0.11') == 1 then
+        vim.validate('lhs', lhs, { 'string' }, false)
+        vim.validate('rhs', rhs, { 'string', 'function' }, false)
+        vim.validate('opts', opts, { 'table', 'nil' }, true)
+    else
+        vim.validate({
+            lhs = { lhs, { 'string' } },
+            rhs = { rhs, { 'string', 'function' } },
+            opts = { opts, { 'table', 'nil' }, true },
+        })
+    end
     if not WK.available() then
         error('(user.maps.wk.convert): `which_key` not available', WARN)
     end
-    opts = is_tbl(opts) and opts or {}
+    local Value = require('user_api.check.value')
+    opts = opts or {}
 
     local res = { lhs, rhs } ---@type RegKey|RegPfx
-    if is_bool(opts.hidden) then
+    if Value.is_bool(opts.hidden) then
         res.hidden = opts.hidden
     end
 
-    if type_not_empty('string', opts.group) then
+    if Value.type_not_empty('string', opts.group) then
         res.group = opts.group
         return res
     end
 
-    if type_not_empty('string', opts.desc) then
+    if Value.type_not_empty('string', opts.desc) then
         res.desc = opts.desc
     end
 
@@ -160,14 +165,16 @@ end
 ---@return AllMaps res
 function WK.convert_dict(T)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('T', T, 'table', false, 'AllMaps')
+        vim.validate('T', T, { 'table' }, false, 'AllMaps')
     else
         vim.validate({ T = { T, { 'table' } } })
     end
+
+    local Value = require('user_api.check.value')
     local res = {} ---@type RegKeys
     for lhs, v in pairs(T) do
         local rhs = v[1] ---@type string|function
-        local opts = is_tbl(v[2]) and v[2] or {} ---@type User.Maps.Opts
+        local opts = Value.is_tbl(v[2]) and v[2] or {} ---@type User.Maps.Opts
         table.insert(res, WK.convert(lhs, rhs, opts))
     end
     return res
@@ -178,8 +185,8 @@ end
 ---@return false|nil
 function WK.register(T, opts)
     if vim.fn.has('nvim-0.11') == 1 then
-        vim.validate('T', T, { 'table' }, false, 'AllMaps')
-        vim.validate('opts', opts, { 'table', 'nil' }, true, 'RegPfx|User.Maps.Opts')
+        vim.validate('T', T, { 'table' }, false)
+        vim.validate('opts', opts, { 'table', 'nil' }, true)
     else
         vim.validate({
             T = { T, { 'table' } },
@@ -192,8 +199,9 @@ function WK.register(T, opts)
         return false
     end
 
+    local Value = require('user_api.check.value')
     opts = opts or O.new({ mode = 'n' })
-    opts.mode = (is_str(opts.mode) and vim.list_contains(MODES, opts.mode)) and opts.mode or 'n'
+    opts.mode = (Value.is_str(opts.mode) and in_list(MODES, opts.mode)) and opts.mode or 'n'
 
     local filtered = {} ---@type (KeyMapRhsArr|AllMaps|AllModeMaps)[]
     for _, val in pairs(T) do
@@ -210,4 +218,4 @@ local M = setmetatable(WK, { ---@type User.Maps.WK
 })
 
 return M
---- vim:ts=4:sts=4:sw=4:et:ai:si:sta:
+-- vim: set ts=4 sts=4 sw=4 et ai si sta:
