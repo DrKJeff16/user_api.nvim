@@ -5,17 +5,19 @@ local in_list = vim.list_contains
 local curr_buf = vim.api.nvim_get_current_buf
 
 ---@class User.Opts
-local Opts = {
-  options = {}, ---@type User.Opts.Spec
-  ---@return User.Opts.AllOpts all_opts
-  get_all_opts = function()
-    return require('user_api.opts.all_opts')
-  end,
-  ---@return User.Opts.Spec defaults
-  get_defaults = function()
-    return require('user_api.opts.config')
-  end,
-}
+local Opts = {}
+
+Opts.options = {} ---@type User.Opts.Spec
+
+---@return User.Opts.AllOpts all_opts
+function Opts.get_all_opts()
+  return require('user_api.opts.all_opts')
+end
+
+---@return User.Opts.Spec defaults
+function Opts.get_defaults()
+  return require('user_api.opts.config')
+end
 
 ---@param ArgLead string
 ---@param CursorPos integer
@@ -62,8 +64,9 @@ end
 Opts.toggleable = Opts.gen_toggleable()
 
 ---@param T User.Opts.Spec
----@param verbose? boolean
+---@param verbose boolean|nil
 ---@return User.Opts.Spec parsed_opts
+---@overload fun(T: User.Opts.Spec): parsed_opts: User.Opts.Spec
 function Opts.long_opts_convert(T, verbose)
   if vim.fn.has('nvim-0.11') == 1 then
     vim.validate('T', T, { 'table' }, false)
@@ -114,10 +117,11 @@ function Opts.long_opts_convert(T, verbose)
   return parsed_opts
 end
 
---- Option setter for the aforementioned options dictionary.
+---Option setter for the aforementioned options dictionary.
 --- ---
---- @param O User.Opts.Spec A dictionary with keys acting as `vim.o` fields, and values
---- @param verbose? boolean Enable verbose printing if `true`
+---@param O User.Opts.Spec A dictionary with keys acting as `vim.o` fields, and values
+---@param verbose boolean|nil Enable verbose printing if `true`
+---@overload fun(O: User.Opts.Spec)
 function Opts.optset(O, verbose)
   if vim.fn.has('nvim-0.11') == 1 then
     vim.validate('O', O, { 'table' }, false, 'User.Opts.Spec')
@@ -175,7 +179,8 @@ function Opts.print_set_opts()
 end
 
 ---@param O string[]|string
----@param verbose? boolean
+---@param verbose boolean|nil
+---@overload fun(O: string[]|string)
 function Opts.toggle(O, verbose)
   if vim.fn.has('nvim-0.11') == 1 then
     vim.validate('O', O, { 'string', 'table' }, false, 'string[]|string')
@@ -249,7 +254,8 @@ function Opts.setup()
   Opts.setup_maps()
 end
 
-local M = setmetatable(Opts, { ---@type User.Opts|fun(override?: User.Opts.Spec, verbose?: boolean)
+---@type User.Opts|fun()|fun(override: User.Opts.Spec|nil)|fun(override: User.Opts.Spec, verbose: boolean|nil)
+local M = setmetatable(Opts, {
   __index = Opts,
   __newindex = function()
     vim.notify(('(%s): This module is read only!'):format(MODSTR), ERROR)
@@ -267,7 +273,6 @@ local M = setmetatable(Opts, { ---@type User.Opts|fun(override?: User.Opts.Spec,
         verbose = { verbose, { 'boolean', 'nil' }, true },
       })
     end
-    override = override or {}
     verbose = verbose ~= nil and verbose or false
 
     local defaults = Opts.get_defaults()
@@ -275,7 +280,7 @@ local M = setmetatable(Opts, { ---@type User.Opts|fun(override?: User.Opts.Spec,
       self.options = Opts.long_opts_convert(defaults, verbose)
     end
 
-    local parsed_opts = Opts.long_opts_convert(override, verbose)
+    local parsed_opts = Opts.long_opts_convert(override or {}, verbose)
     Opts.options = vim.tbl_deep_extend('keep', parsed_opts, self.options) ---@type vim.bo|vim.wo
     Opts.optset(Opts.options, verbose)
   end,
