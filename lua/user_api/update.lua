@@ -2,27 +2,18 @@ local MODSTR = 'user_api.update'
 local WARN = vim.log.levels.WARN
 local ERROR = vim.log.levels.ERROR
 local INFO = vim.log.levels.INFO
-local uv = vim.uv or vim.loop
 
 ---@class User.Update
 local Update = {}
 
----@param verbose? boolean
+---@param verbose boolean
 ---@overload fun()
 function Update.update(verbose)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('verbose', verbose, { 'boolean', 'nil' }, true)
-  else
-    vim.validate({ verbose = { verbose, { 'boolean', 'nil' }, true } })
-  end
+  require('user_api.check.exists').validate({ verbose = { verbose, { 'boolean', 'nil' }, true } })
   verbose = verbose ~= nil and verbose or false
 
-  local og_cwd = uv.cwd() or vim.fn.getcwd()
-
-  vim.api.nvim_set_current_dir(vim.fn.stdpath('config'))
-  local cmd = vim.system({ 'git', 'pull', '--rebase' }, { text = true }):wait(10000)
-
-  vim.api.nvim_set_current_dir(og_cwd)
+  local command = { 'git', 'pull', '--rebase' }
+  local cmd = vim.system(command, { text = true, cwd = vim.fn.stdpath('config') }):wait(10000)
   if verbose and cmd.stdout and cmd.stdout ~= '' then
     vim.notify(cmd.stdout, INFO, {
       animate = true,
@@ -68,7 +59,7 @@ end
 
 function Update.setup()
   local desc = require('user_api.maps').desc
-  require('user_api.config').keymaps({
+  require('user_api.config').keymaps.set({
     n = {
       ['<leader>U'] = { group = '+User API' },
       ['<leader>Uu'] = { Update.update, desc('Update User Config') },

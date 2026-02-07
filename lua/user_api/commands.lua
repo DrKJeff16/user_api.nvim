@@ -1,8 +1,8 @@
 ---@class User.Commands.CmdSpec
 ---@field [1] fun(ctx?: vim.api.keyset.create_user_command.command_args)
 ---@field [2]? vim.api.keyset.user_command
----@field mappings? AllModeMaps
 
+local INFO = vim.log.levels.INFO
 local desc = require('user_api.maps').desc
 
 ---@class User.Commands
@@ -17,10 +17,12 @@ Commands.commands.Redir = {
     local bufnr = vim.api.nvim_create_buf(true, true)
     local win = vim.api.nvim_open_win(bufnr, true, { vertical = false })
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, l)
-    vim.bo[bufnr].filetype = 'Redir'
-    vim.bo[bufnr].modified = false
-    vim.wo[win].number = false
-    vim.wo[win].signcolumn = 'no'
+
+    local buf_opts, win_opts = { buf = bufnr }, { win = win } ---@type vim.api.keyset.option, vim.api.keyset.option
+    vim.api.nvim_set_option_value('filetype', 'Redir', buf_opts)
+    vim.api.nvim_set_option_value('modified', false, buf_opts)
+    vim.api.nvim_set_option_value('number', false, win_opts)
+    vim.api.nvim_set_option_value('signcolumn', 'no', win_opts)
 
     vim.keymap.set('n', 'q', function()
       vim.api.nvim_buf_delete(bufnr, { force = true })
@@ -36,12 +38,47 @@ Commands.commands.Redir = {
     complete = 'command',
     desc = 'Redirect command output to scratch buffer',
   },
-  mappings = {
-    n = {
-      ['<Leader>UC'] = { group = '+Commands' },
-      ['<Leader>UCR'] = { ':Redir ', desc('Prompt to `Redir` command', false) },
-      ['<M-r>'] = { ':Redir ', desc('Prompt `Redir`', false) },
-    },
+}
+
+Commands.commands.Current = {
+  function(ctx)
+    local curr = { ---@type { buffer: integer, window: integer, tabpage: integer }
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      tabpage = vim.api.nvim_get_current_tabpage(),
+    }
+    if #ctx.fargs == 0 then
+      vim.notify(
+        ('buffer: %s\nwindow: %s\ntabpage %s'):format(curr.buffer, curr.window, curr.tabpage),
+        INFO
+      )
+      return
+    end
+    local arg = ctx.fargs[1] ---@type 'buffer'|'buf'|'window'|'win'|'tab'|'tabpage'
+    if vim.list_contains({ 'buffer', 'buf' }, arg) then
+      vim.notify(('%d'):format(curr.buffer), INFO, { title = 'Current Buffer' })
+      return
+    end
+    if vim.list_contains({ 'window', 'win' }, arg) then
+      vim.notify(('%d'):format(curr.window), INFO, { title = 'Current Window' })
+      return
+    end
+    if vim.list_contains({ 'tabpage', 'tab' }, arg) then
+      vim.notify(('%d'):format(curr.tabpage), INFO, { title = 'Current Tabpage' })
+      return
+    end
+
+    vim.notify(('(:Current) - Invalid argument `%s`!'):format(arg), vim.log.levels.ERROR)
+  end,
+  {
+    nargs = '?',
+    complete = function(_, lead) ---@param lead string
+      local args = vim.split(lead, '%s+', { trimempty = false })
+      if #args >= 3 then
+        return {}
+      end
+      return { 'buf', 'buffer', 'win', 'window', 'tab', 'tabpage' }
+    end,
   },
 }
 
@@ -64,46 +101,21 @@ Commands.commands.DeleteInactiveBuffers = {
 ---@param name string
 ---@param cmd fun(ctx?: vim.api.keyset.create_user_command.command_args)
 ---@param opts? vim.api.keyset.user_command
----@param mappings? AllModeMaps
-function Commands.add_command(name, cmd, opts, mappings)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('name', name, { 'string' }, false)
-    vim.validate('cmd', cmd, { 'function' }, false)
-    vim.validate('opts', opts, { 'table', 'nil' }, true, 'vim.api.keyset.user_command')
-    vim.validate('mappings', mappings, { 'table', 'nil' }, true, 'AllModeMaps')
-  else
-    vim.validate({
-      name = { name, { 'string' } },
-      cmd = { cmd, { 'function' } },
-      opts = { opts, { 'table', 'nil' }, true },
-      mappings = { mappings, { 'table', 'nil' }, true },
-    })
-  end
+function Commands.add_command(name, cmd, opts)
+  require('user_api.check.exists').validate({
+    name = { name, { 'string' } },
+    cmd = { cmd, { 'function' } },
+    opts = { opts, { 'table', 'nil' }, true },
+  })
 
   local cmnd = { cmd, opts or {} } ---@type User.Commands.CmdSpec
-  if mappings then
-    cmnd.mappings = mappings
-  end
   Commands.setup({ [name] = cmnd })
 end
 
-function Commands.setup_keys()
-  local Keymaps = require('user_api.config').keymaps
-  for _, cmd in pairs(Commands.commands) do
-    if cmd.mappings and not vim.tbl_isempty(cmd.mappings) then
-      Keymaps(cmd.mappings)
-    end
-  end
-end
-
----@param cmds table<string, User.Commands.CmdSpec>|nil
+---@param cmds table<string, User.Commands.CmdSpec>
 ---@overload fun()
 function Commands.setup(cmds)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('cmds', cmds, { 'table', 'nil' }, true, 'User.Commands.Spec')
-  else
-    vim.validate({ cmds = { cmds, { 'table', 'nil' }, true } })
-  end
+  require('user_api.check.exists').validate({ cmds = { cmds, { 'table', 'nil' }, true } })
 
   Commands.commands = vim.tbl_deep_extend('keep', cmds or {}, Commands.commands)
   for cmd, T in pairs(Commands.commands) do
@@ -111,7 +123,13 @@ function Commands.setup(cmds)
     vim.api.nvim_create_user_command(cmd, exec, opts)
   end
 
-  Commands.setup_keys()
+  require('user_api.config').keymaps.set({
+    n = {
+      ['<Leader>UC'] = { group = '+Commands' },
+      ['<Leader>UCR'] = { ':Redir ', desc('Prompt to `Redir` command', false) },
+      ['<M-r>'] = { ':Redir ', desc('Prompt `Redir`', false) },
+    },
+  })
 end
 
 local M = setmetatable(Commands, { ---@type User.Commands

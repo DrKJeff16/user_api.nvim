@@ -12,34 +12,17 @@ Maps.keymap = require('user_api.maps.keymap')
 Maps.wk = require('user_api.maps.wk')
 
 function Maps.desc(desc, silent, bufnr, noremap, nowait, expr)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('desc', desc, { 'string', 'nil' }, true)
-    vim.validate('silent', silent, { 'boolean', 'nil' }, true)
-    vim.validate('bufnr', bufnr, { 'number', 'nil' }, true)
-    vim.validate('noremap', noremap, { 'boolean', 'nil' }, true)
-    vim.validate('nowait', nowait, { 'boolean', 'nil' }, true)
-    vim.validate('expr', expr, { 'boolean', 'nil' }, true)
-  else
-    vim.validate({
-      desc = { desc, { 'string', 'nil' }, true },
-      silent = { silent, { 'boolean', 'nil' }, true },
-      bufnr = { bufnr, { 'number', 'nil' }, true },
-      noremap = { noremap, { 'boolean', 'nil' }, true },
-      nowait = { nowait, { 'boolean', 'nil' }, true },
-      expr = { expr, { 'boolean', 'nil' }, true },
-    })
-  end
-
-  local Value = require('user_api.check.value')
-  if not Value.type_not_empty('string', desc) then
-    desc = 'Unnamed Key'
-  end
-  if silent == nil then
-    silent = true
-  end
-  if noremap == nil then
-    noremap = true
-  end
+  require('user_api.check.exists').validate({
+    desc = { desc, { 'string', 'nil' }, true },
+    silent = { silent, { 'boolean', 'nil' }, true },
+    bufnr = { bufnr, { 'number', 'nil' }, true },
+    noremap = { noremap, { 'boolean', 'nil' }, true },
+    nowait = { nowait, { 'boolean', 'nil' }, true },
+    expr = { expr, { 'boolean', 'nil' }, true },
+  })
+  desc = (desc and desc ~= '') and desc or 'Unnamed Key'
+  silent = silent ~= nil and silent or true
+  noremap = noremap ~= nil and noremap or true
 
   local res = require('user_api.maps.objects').new()
   res:add({ desc = desc, silent = silent, noremap = noremap })
@@ -57,19 +40,12 @@ function Maps.desc(desc, silent, bufnr, noremap, nowait, expr)
 end
 
 function Maps.nop(T, opts, mode, prefix)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('T', T, { 'string', 'table' }, false)
-    vim.validate('opts', opts, { 'table', 'nil' }, true)
-    vim.validate('mode', mode, { 'string', 'nil' }, true)
-    vim.validate('prefix', prefix, { 'string', 'nil' }, true)
-  else
-    vim.validate({
-      T = { T, { 'string', 'table' } },
-      opts = { opts, { 'table', 'nil' }, true },
-      mode = { mode, { 'string', 'nil' }, true },
-      prefix = { prefix, { 'string', 'nil' }, true },
-    })
-  end
+  require('user_api.check.exists').validate({
+    T = { T, { 'string', 'table' } },
+    opts = { opts, { 'table', 'nil' }, true },
+    mode = { mode, { 'string', 'nil' }, true },
+    prefix = { prefix, { 'string', 'nil' }, true },
+  })
 
   local Value = require('user_api.check.value')
   mode = (Value.is_str(mode) and in_list(MODES, mode)) and mode or 'n'
@@ -90,11 +66,12 @@ function Maps.nop(T, opts, mode, prefix)
   prefix = prefix or ''
 
   local func = Maps.keymap[mode]
-  ---@cast T string
   if Value.is_str(T) then
+    ---@cast T string
     func(prefix .. T, '<Nop>', opts)
     return
   end
+
   ---@cast T string[]
   for _, v in ipairs(T) do
     func(prefix .. v, '<Nop>', opts)
@@ -102,6 +79,14 @@ function Maps.nop(T, opts, mode, prefix)
 end
 
 function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
+  require('user_api.check.exists').validate({
+    T = { T, { 'table' } },
+    map_func = { map_func, { 'string' } },
+    has_modes = { has_modes, { 'boolean', 'nil' }, true },
+    mode = { mode, { 'string', 'table', 'nil' }, true },
+    bufnr = { bufnr, { 'number', 'nil' }, true },
+  })
+
   local Value = require('user_api.check.value')
   if not Value.type_not_empty('table', T) then
     error("(user_api.maps.map_dict): Keys either aren't table or table is empty", ERROR)
@@ -116,7 +101,7 @@ function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
   has_modes = Value.is_bool(has_modes) and has_modes or false
   bufnr = Value.is_int(bufnr) and bufnr or nil
 
-  local func ---@type fun(lhs: string, rhs: string|function, opts?: vim.keymap.set.Opts)
+  local func
   if has_modes then
     local keymap_ran = false
     ---@cast T AllModeMaps
@@ -125,8 +110,11 @@ function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
         if map_func == 'keymap' then
           func = Maps.keymap[mode_choice]
           for lhs, v in pairs(t) do
-            v[2] = Value.is_tbl(v[2]) and v[2] or {}
-            func(lhs, v[1], v[2])
+            if v[2] and v[3] then
+              func(lhs, v[2], v[3] or {})
+            elseif v[1] then
+              func(lhs, v[1], v[2] or {})
+            end
           end
           keymap_ran = true
         end
@@ -146,6 +134,9 @@ function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
 
             if bufnr ~= nil then
               tbl.buffer = bufnr
+            end
+            if Value.is_str(v.proxy) then
+              tbl.proxy = v.proxy
             end
             if Value.is_str(v.group) then
               tbl.group = v.group
@@ -184,8 +175,11 @@ function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
     func = Maps.keymap[mode]
     ---@cast T AllMaps
     for lhs, v in pairs(T) do
-      v[2] = Value.is_tbl(v[2]) and v[2] or {}
-      func(lhs, v[1], v[2])
+      if v[2] and v[3] then
+        func(lhs, v[2], v[3])
+      elseif v[1] then
+        func(lhs, v[1], v[2] or {})
+      end
     end
     return
   end
@@ -203,6 +197,9 @@ function Maps.map_dict(T, map_func, has_modes, mode, bufnr)
 
       if bufnr ~= nil then
         tbl.buffer = bufnr
+      end
+      if Value.is_str(v.proxy) then
+        tbl.proxy = v.proxy
       end
       if Value.is_str(v.group) then
         tbl.group = v.group

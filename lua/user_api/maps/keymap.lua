@@ -1,3 +1,5 @@
+---@module 'which-key'
+
 ---Available modes.
 --- ---
 ---@alias MapModes 'n'|'i'|'v'|'t'|'o'|'x'
@@ -25,37 +27,15 @@
 ---@alias KeyMapDicts table<string, KeyMapRhsDict>
 
 ---@alias AllMaps table<string, KeyMapRhsArr|RegKey|RegPfx>
-
----@class AllModeMaps
----@field n? AllMaps
----@field i? AllMaps
----@field v? AllMaps
----@field t? AllMaps
----@field o? AllMaps
----@field x? AllMaps
+---@alias AllModeMaps table<'n'|'i'|'v'|'t'|'o'|'x', AllMaps>
 
 ---@class KeyMapTbl
 ---@field lhs string
 ---@field rhs string|function
 ---@field opts? User.Maps.Opts
 
----@class KeyMapModeDict
----@field n? KeyMapDict
----@field i? KeyMapDict
----@field v? KeyMapDict
----@field t? KeyMapDict
----@field o? KeyMapDict
----@field x? KeyMapDict
-
----@class KeyMapModeDicts
----@field n? KeyMapTbl[]
----@field i? KeyMapTbl[]
----@field v? KeyMapTbl[]
----@field t? KeyMapTbl[]
----@field o? KeyMapTbl[]
----@field x? KeyMapTbl[]
-
-local ERROR = vim.log.levels.ERROR
+---@alias KeyMapModeDict table<'n'|'i'|'v'|'t'|'o'|'x'|'V', KeyMapDict>
+---@alias KeyMapModeDicts table<'n'|'i'|'v'|'t'|'o'|'x'|'V', KeyMapTbl[]>
 
 ---@param mode MapModes
 ---@return fun(lhs: string, rhs: string|function, opts?: vim.keymap.set.Opts)
@@ -64,36 +44,24 @@ local function variant(mode)
   ---@param rhs string|function
   ---@param opts? vim.keymap.set.Opts
   return function(lhs, rhs, opts)
-    if vim.fn.has('nvim-0.11') == 1 then
-      vim.validate('lhs', lhs, { 'string' }, false)
-      vim.validate('rhs', rhs, { 'string', 'function' }, false)
-      vim.validate('opts', opts, { 'table', 'nil' }, true, 'vim.keymap.set.Opts')
-    else
-      vim.validate({
-        lhs = { lhs, { 'string' } },
-        rhs = { rhs, { 'string', 'function' } },
-        opts = { opts, { 'table', 'nil' }, true },
-      })
-    end
-
     vim.keymap.set(mode, lhs, rhs, opts or {})
   end
 end
 
 ---@class User.Maps.Keymap
-local Keymap = {
-  n = variant('n'),
-  i = variant('i'),
-  v = variant('v'),
-  t = variant('t'),
-  o = variant('o'),
-  x = variant('x'),
-}
+local Keymap = {}
+
+Keymap.n = variant('n')
+Keymap.i = variant('i')
+Keymap.v = variant('v')
+Keymap.t = variant('t')
+Keymap.o = variant('o')
+Keymap.x = variant('x')
 
 local M = setmetatable({}, { ---@type User.Maps.Keymap
   __index = Keymap,
   __newindex = function()
-    vim.notify('User.Maps.Keymap is Read-Only!', ERROR)
+    vim.notify('User.Maps.Keymap is Read-Only!', vim.log.levels.ERROR)
   end,
 })
 

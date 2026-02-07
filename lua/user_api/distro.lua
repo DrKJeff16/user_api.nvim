@@ -1,37 +1,35 @@
-local INFO = vim.log.levels.INFO
-local ERROR = vim.log.levels.ERROR
-
 ---@class User.Distro
 local Distro = {}
 
 Distro.archlinux = require('user_api.distro.archlinux')
 Distro.termux = require('user_api.distro.termux')
 
-local M = setmetatable(Distro, { ---@type User.Distro|fun()|fun(verbose?: boolean)
+---@param verbose boolean
+---@overload fun()
+function Distro.setup(verbose)
+  require('user_api.check.exists').validate({ verbose = { verbose, { 'boolean', 'nil' }, true } })
+  verbose = verbose ~= nil and verbose or false
+
+  if Distro.termux.validate() then
+    Distro.termux.setup()
+    if verbose then
+      vim.notify('Termux distribution detected...', vim.log.levels.INFO)
+    end
+    return
+  end
+  if Distro.archlinux.validate() then
+    Distro.archlinux.setup()
+    if verbose then
+      vim.notify('Arch Linux distribution detected...', vim.log.levels.INFO)
+    end
+    return
+  end
+end
+
+local M = setmetatable(Distro, { ---@type User.Distro
   __index = Distro,
   __newindex = function()
-    vim.notify('User.Distro is Read-Only!', ERROR)
-  end,
-  __call = function(_, verbose) ---@param verbose? boolean
-    if vim.fn.has('nvim-0.11') == 1 then
-      vim.validate('verbose', verbose, { 'boolean', 'nil' }, true)
-    else
-      vim.validate({ verbose = { verbose, { 'boolean', 'nil' }, true } })
-    end
-    verbose = verbose ~= nil and verbose or false
-
-    local msg = ''
-    if Distro.termux.validate() then
-      Distro.termux()
-      msg = 'Termux distribution detected...'
-    elseif Distro.archlinux.validate() then
-      Distro.archlinux()
-      msg = 'Arch Linux distribution detected...'
-    end
-
-    if verbose and msg ~= '' then
-      vim.notify(msg, INFO)
-    end
+    vim.notify('User.Distro is Read-Only!', vim.log.levels.ERROR)
   end,
 })
 

@@ -6,18 +6,25 @@ local function is_dir(dir) ---@param dir string
 end
 
 ---@class User.Distro.Termux
-local Termux = {
-  PREFIX = vim.fn.has_key(vim.fn.environ(), 'PREFIX') and vim.fn.environ().PREFIX or '', ---@type string
+local Termux = {}
+
+Termux.PREFIX = vim.fn.has_key(vim.fn.environ(), 'PREFIX') and vim.fn.environ().PREFIX or '' ---@type string
+
+local RTPATHS = {
+  vim.fs.joinpath(Termux.PREFIX, 'share/vim/vimfiles/after'),
+  vim.fs.joinpath(Termux.PREFIX, 'share/vim/vimfiles'),
+  vim.fs.joinpath(Termux.PREFIX, 'share/nvim/runtime'),
+  vim.fs.joinpath(Termux.PREFIX, 'local/share/vim/vimfiles/after'),
+  vim.fs.joinpath(Termux.PREFIX, 'local/share/vim/vimfiles'),
+  vim.fs.joinpath(Termux.PREFIX, 'local/share/nvim/runtime'),
 }
 
-Termux.rtpaths = {
-  ('%s/share/vim/vimfiles/after'):format(Termux.PREFIX),
-  ('%s/share/vim/vimfiles'):format(Termux.PREFIX),
-  ('%s/share/nvim/runtime'):format(Termux.PREFIX),
-  ('%s/local/share/vim/vimfiles/after'):format(Termux.PREFIX),
-  ('%s/local/share/vim/vimfiles'):format(Termux.PREFIX),
-  ('%s/local/share/nvim/runtime'):format(Termux.PREFIX),
-}
+Termux.rtpaths = setmetatable(RTPATHS, { ---@type string[]
+  __index = RTPATHS,
+  __newindex = function()
+    vim.notify('User.Distro.Termux.rtpaths is Read-Only!', vim.log.levels.ERROR)
+  end,
+})
 
 function Termux.validate()
   if Termux.PREFIX == '' or not is_dir(Termux.PREFIX) then
@@ -38,21 +45,22 @@ function Termux.validate()
   return true
 end
 
-local M = setmetatable({}, { ---@type User.Distro.Termux|function
+function Termux.setup()
+  if not (Termux.validate() and is_dir(Termux.PREFIX)) then
+    return
+  end
+  for _, path in ipairs(Termux.rtpaths) do
+    if is_dir(path) == 1 then
+      vim.o.rtp = vim.o.rtp .. ',' .. path
+    end
+  end
+  vim.api.nvim_set_option_value('wrap', true, { scope = 'global' })
+end
+
+local M = setmetatable({}, { ---@type User.Distro.Termux
   __index = Termux,
   __newindex = function()
     vim.notify('User.Distro.Termux is Read-Only!', vim.log.levels.ERROR)
-  end,
-  __call = function(self) ---@param self User.Distro.Termux
-    if not (Termux.validate() and is_dir(Termux.PREFIX)) then
-      return
-    end
-    for _, path in ipairs(self.rtpaths) do
-      if is_dir(path) == 1 then
-        vim.o.rtp = vim.o.rtp .. ',' .. path
-      end
-    end
-    vim.api.nvim_set_option_value('wrap', true, { scope = 'global' })
   end,
 })
 

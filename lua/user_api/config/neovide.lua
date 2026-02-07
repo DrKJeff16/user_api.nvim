@@ -54,10 +54,6 @@ local g_opts = {
 ---@class Config.Neovide.Opts.O
 local o_opts = { linespace = 0, guifont = 'FiraCode Nerd Font Mono:h19' }
 
----@class Config.Neovide.Opts
----@field g Config.Neovide.Opts.G
----@field o Config.Neovide.Opts.O
-
 ---@class User.Config.Neovide
 local Neovide = {}
 
@@ -66,12 +62,17 @@ Neovide.active = false ---@type boolean
 
 ---@return Config.Neovide.Opts defaults
 function Neovide.get_defaults()
-  return { g = g_opts, o = o_opts }
+  ---@class Config.Neovide.Opts
+  ---@field g Config.Neovide.Opts.G
+  ---@field o Config.Neovide.Opts.O
+  local defaults = { g = g_opts, o = o_opts }
+
+  return defaults
 end
 
 ---@return boolean active
 function Neovide.check()
-  return require('user_api.check.exists').executable('neovide') and vim.g.neovide
+  return require('user_api.check.exists').executable('neovide') and vim.g.neovide or false
 end
 
 ---@param opacity number
@@ -80,21 +81,12 @@ end
 ---@overload fun()
 ---@overload fun(opacity: number)
 ---@overload fun(opacity: number, transparency: number)
----@overload fun(opacity: number|nil, transparency: number)
----@overload fun(opacity: number|nil, transparency: number, bg: string)
----@overload fun(opacity: number|nil, transparency: number|nil, bg: string)
 function Neovide.set_transparency(opacity, transparency, bg)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('opacity', opacity, 'number', true)
-    vim.validate('transparency', transparency, 'number', true)
-    vim.validate('bg', bg, 'string', true)
-  else
-    vim.validate({
-      opacity = { opacity, { 'number', 'nil' } },
-      transparency = { transparency, { 'number', 'nil' } },
-      bg = { bg, { 'string', 'nil' } },
-    })
-  end
+  require('user_api.check.exists').validate({
+    opacity = { opacity, { 'number', 'nil' } },
+    transparency = { transparency, { 'number', 'nil' } },
+    bg = { bg, { 'string', 'nil' } },
+  })
 
   local num_range = require('user_api.check.value').num_range
   local eq = { high = true, low = true }
@@ -121,15 +113,10 @@ end
 ---@param O any[]
 ---@param pfx string
 function Neovide.parse_g_opts(O, pfx)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('O', O, { 'table' }, false, 'any[]')
-    vim.validate('pfx', pfx, { 'string' }, false)
-  else
-    vim.validate({
-      O = { O, { 'table' } },
-      pfx = { pfx, { 'string' } },
-    })
-  end
+  require('user_api.check.exists').validate({
+    O = { O, { 'table' } },
+    pfx = { pfx, { 'string' } },
+  })
   pfx = pfx:sub(1, 8) == 'neovide_' and pfx or 'neovide_'
 
   for k, v in ipairs(O) do
@@ -148,7 +135,7 @@ function Neovide.setup_maps()
   end
 
   local desc = require('user_api.maps').desc
-  require('user_api.config').keymaps({
+  require('user_api.config').keymaps.set({
     n = {
       ['<leader><CR>'] = { group = '+Neovide' },
       ['<leader><CR>V'] = {
@@ -166,27 +153,18 @@ function Neovide.setup_maps()
   })
 end
 
----@param T table|nil
----@param transparent boolean|nil
----@param verbose boolean|nil
+---@param T table
+---@param transparent boolean
+---@param verbose boolean
+---@overload fun()
 ---@overload fun(T: table)
 ---@overload fun(T: table, transparent: boolean)
----@overload fun(T: table, transparent: boolean|nil, verbose: boolean)
----@overload fun(T: table|nil, transparent: boolean)
----@overload fun(T: table|nil, transparent: boolean, verbose: boolean)
----@overload fun(T: table|nil, transparent: boolean|nil, verbose: boolean)
 function Neovide.setup(T, transparent, verbose)
-  if vim.fn.has('nvim-0.11') == 1 then
-    vim.validate('T', T, { 'table', 'nil' }, true)
-    vim.validate('transparent', transparent, { 'boolean', 'nil' }, true)
-    vim.validate('verbose', verbose, { 'boolean', 'nil' }, true)
-  else
-    vim.validate({
-      T = { T, { 'table', 'nil' }, true },
-      transparent = { transparent, { 'boolean', 'nil' }, true },
-      verbose = { verbose, { 'boolean', 'nil' }, true },
-    })
-  end
+  require('user_api.check.exists').validate({
+    T = { T, { 'table', 'nil' }, true },
+    transparent = { transparent, { 'boolean', 'nil' }, true },
+    verbose = { verbose, { 'boolean', 'nil' }, true },
+  })
 
   if not Neovide.check() then
     return
