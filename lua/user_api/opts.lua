@@ -3,6 +3,7 @@ local ERROR = vim.log.levels.ERROR
 local INFO = vim.log.levels.INFO
 local in_list = vim.list_contains
 local curr_buf = vim.api.nvim_get_current_buf
+local validate = require('user_api.check').validate
 
 ---@class User.Opts
 local Opts = {}
@@ -45,7 +46,11 @@ function Opts.gen_toggleable()
   local long, short = vim.tbl_keys(T), vim.tbl_values(T) ---@type string[], string[]
   for _, opt_type in ipairs({ long, short }) do
     for _, opt in ipairs(opt_type) do
-      if opt ~= '' and in_list({ 'no', 'yes', true, false }, vim.o[opt]) then
+      if
+        opt ~= ''
+        and vim.list_contains(vim.tbl_keys(vim.o), opt)
+        and in_list({ 'no', 'yes', true, false }, vim.o[opt])
+      then
         table.insert(valid, opt)
       end
     end
@@ -62,7 +67,7 @@ Opts.toggleable = Opts.gen_toggleable()
 ---@return User.Opts.Spec parsed_opts
 ---@overload fun(T: User.Opts.Spec): parsed_opts: User.Opts.Spec
 function Opts.long_opts_convert(T, verbose)
-  require('user_api.check.exists').validate({
+  validate({
     T = { T, { 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
@@ -112,7 +117,7 @@ end
 ---@param verbose boolean Enable verbose printing if `true`
 ---@overload fun(O: User.Opts.Spec)
 function Opts.optset(O, verbose)
-  require('user_api.check.exists').validate({
+  validate({
     O = { O, { 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
@@ -168,7 +173,7 @@ end
 ---@overload fun(O: string, verbose: boolean)
 ---@overload fun(O: string[], verbose: boolean)
 function Opts.toggle(O, verbose)
-  require('user_api.check.exists').validate({
+  validate({
     O = { O, { 'string', 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
@@ -240,7 +245,7 @@ end
 ---@overload fun(override: User.Opts.Spec)
 ---@overload fun(override: User.Opts.Spec, verbose: boolean)
 function Opts.setup(override, verbose, cursor_blink)
-  require('user_api.check.exists').validate({
+  validate({
     override = { override, { 'table', 'nil' }, true },
     verbose = { verbose, { 'boolean', 'nil' }, true },
     cursor_blink = { cursor_blink, { 'boolean', 'nil' }, true },
