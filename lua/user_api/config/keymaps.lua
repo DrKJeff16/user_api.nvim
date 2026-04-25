@@ -17,8 +17,9 @@ local function delete_file(force)
 
   return function()
     local bufnr = vim.api.nvim_get_current_buf()
-    local opts = optget({ 'modifiable', 'buftype' }, { buf = bufnr })
-    if not opts.modifiable or opts.buftype == 'nowrite' then
+    local modifiable = optget('modifiable', 'buf', bufnr) --[[@as boolean]]
+    local bt = optget('buftype', 'buf', bufnr) --[[@as string]]
+    if not modifiable or bt == 'nowrite' then
       vim.notify('Buffer is not modifiable!', ERROR)
       return
     end
@@ -76,7 +77,7 @@ local function new_file()
 end
 
 local function indent_file()
-  if not optget('modifiable', { buf = vim.api.nvim_get_current_buf() }).modifiable then
+  if not optget('modifiable', 'buf', vim.api.nvim_get_current_buf()) then
     vim.notify('Unable to indent. File is not modifiable!', ERROR)
     return
   end
