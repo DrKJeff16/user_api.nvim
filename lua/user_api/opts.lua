@@ -5,6 +5,8 @@ local curr_buf = vim.api.nvim_get_current_buf
 local validate = require('user_api.check').validate
 
 ---@class User.Opts
+---@field all_opts User.Opts.AllOpts
+---@field config User.Opts.Spec
 ---@field options User.Opts.Spec
 local M = {}
 
@@ -78,12 +80,13 @@ function M.long_opts_convert(T, verbose)
     T = { T, { 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
-  verbose = verbose ~= nil and verbose or false
+  if verbose == nil then
+    verbose = false
+  end
 
-  local Value = require('user_api.check.value')
   local parsed_opts = {} ---@type User.Opts.Spec
   local msg, verb_msg = '', ''
-  if not Value.type_not_empty('table', T) then
+  if not require('user_api.check').type_not_empty('table', T) then
     if verbose then
       vim.notify('(user.opts.long_opts_convert): All seems good', INFO)
     end
@@ -96,12 +99,12 @@ function M.long_opts_convert(T, verbose)
   for opt, val in pairs(T) do
     if in_list(keys, opt) then
       parsed_opts[opt] = val
-    elseif not Value.tbl_values({ opt }, ALL_OPTIONS) then
+    elseif not require('user_api.check').tbl_values({ opt }, ALL_OPTIONS) then
       -- If neither long nor short (known) option, append to warning message
       msg = ('%s- Option `%s` not valid!\n'):format(msg, opt)
     else
-      local new_opt = Value.tbl_values({ opt }, ALL_OPTIONS, true)
-      if Value.is_str(new_opt) and new_opt ~= '' then
+      local new_opt = require('user_api.check').tbl_values({ opt }, ALL_OPTIONS, true)
+      if require('user_api.check').is_str(new_opt) and new_opt ~= '' then
         parsed_opts[new_opt] = val
         verb_msg = ('%s%s ==> %s\n'):format(verb_msg, opt, new_opt)
       else
@@ -127,7 +130,9 @@ function M.optset(O, verbose)
     O = { O, { 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
-  verbose = verbose ~= nil and verbose or false
+  if verbose == nil then
+    verbose = false
+  end
   if not vim.api.nvim_get_option_value('modifiable', { buf = curr_buf() }) then
     return
   end
@@ -177,7 +182,9 @@ function M.toggle(O, verbose)
     O = { O, { 'string', 'table' } },
     verbose = { verbose, { 'boolean', 'nil' }, true },
   })
-  verbose = verbose ~= nil and verbose or false
+  if verbose == nil then
+    verbose = false
+  end
 
   local Value = require('user_api.check.value')
 
@@ -249,8 +256,12 @@ function M.setup(override, verbose, cursor_blink)
     verbose = { verbose, { 'boolean', 'nil' }, true },
     cursor_blink = { cursor_blink, { 'boolean', 'nil' }, true },
   })
-  verbose = verbose ~= nil and verbose or false
-  cursor_blink = cursor_blink ~= nil and cursor_blink or false
+  if verbose == nil then
+    verbose = false
+  end
+  if cursor_blink == nil then
+    cursor_blink = false
+  end
 
   if vim.tbl_isempty(M.options) then
     M.options = M.long_opts_convert(M.get_defaults(), verbose)
@@ -265,5 +276,14 @@ function M.setup(override, verbose, cursor_blink)
   end
 end
 
-return M
+local Opts = setmetatable(M, { ---@type User.Opts
+  __index = function(self, k)
+    if require('user_api.check').module('user_api.opts.' .. k) then
+      return require('user_api.opts.' .. k)
+    end
+    return rawget(self, k) or nil
+  end,
+})
+
+return Opts
 -- vim: set ts=2 sts=2 sw=2 et ai si sta:

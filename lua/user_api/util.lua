@@ -4,12 +4,67 @@ local in_list = vim.list_contains
 local validate = require('user_api.check').validate
 
 ---@class User.Util
+---@field autocmd User.Util.Autocmd
+---@field notify User.Util.Notify
+---@field spinner User.Util.Spinner
+---@field string User.Util.String
 local M = {}
 
-M.au = require('user_api.util.autocmd')
-M.notify = require('user_api.util.notify')
-M.spinner = require('user_api.util.spinner')
-M.string = require('user_api.util.string')
+---Get rid of all duplicates in input table.
+---
+---If table is empty, it'll just return it as-is.
+---
+---If the data passed to the function is not a table,
+---an error will be raised.
+--- ---
+---@generic T: table
+---@param T T
+---@param key? string|integer
+---@return T NT
+---@nodiscard
+function M.dedup(T, key)
+  validate({
+    T = { T, { 'table' } },
+    key = { key, { 'string', 'nil' }, true },
+  })
+  key = (key and key ~= '') and key or nil
+  if vim.tbl_isempty(T) then
+    return T
+  end
+
+  local list = vim.islist(T)
+  local names, NT = {}, {}
+  for k, v in pairs(T) do
+    local not_dup = false
+    if type(v) == 'table' then
+      if not key then
+        not_dup = not vim.tbl_contains(NT, function(val)
+          return vim.deep_equal(val, v)
+        end, { predicate = true })
+      else
+        not_dup = not vim.tbl_contains(names, function(val)
+          return vim.deep_equal(val, v[key])
+        end, { predicate = true })
+        if not_dup then
+          table.insert(names, v[key])
+        end
+      end
+    else
+      not_dup = not vim.tbl_contains(NT, function(val)
+        return vim.deep_equal(val, v)
+      end, { predicate = true })
+    end
+    if not_dup then
+      if list then
+        table.insert(NT, v)
+      else
+        NT[k] = v
+      end
+    end
+  end
+
+  return NT
+end
 
 ---@overload fun(option: string): value: any
 ---@overload fun(option: string[]): value: vim.bo|vim.wo
@@ -136,7 +191,7 @@ function M.lstrip(char, str)
     return str
   end
 
-  if require('user_api.check.value').is_tbl(char) then
+  if require('user_api.check').is_tbl(char) then
     ---@cast char string[]
     if not vim.tbl_isempty(char) then
       for _, c in ipairs(char) do
@@ -182,7 +237,7 @@ function M.rstrip(char, str)
     return str
   end
 
-  if require('user_api.check.value').is_tbl(char) then
+  if require('user_api.check').is_tbl(char) then
     ---@cast char string[]
     if not vim.tbl_isempty(char) then
       for _, c in ipairs(char) do
@@ -218,7 +273,7 @@ function M.strip(char, str)
     return str
   end
 
-  if require('user_api.check.value').is_tbl(char) then
+  if require('user_api.check').is_tbl(char) then
     ---@cast char string[]
     if not vim.tbl_isempty(char) then
       for _, c in ipairs(char) do
@@ -253,12 +308,11 @@ function M.get_opts_tbl(s, bufnr)
   })
   bufnr = bufnr or curr_buf()
 
-  local Value = require('user_api.check.value')
   local res = {} ---@type table<string, any>
-  if Value.type_not_empty('string', s) then ---@cast s string
+  if require('user_api.check').type_not_empty('string', s) then ---@cast s string
     res[s] = vim.api.nvim_get_option_value(s, { buf = bufnr })
   end
-  if Value.type_not_empty('table', s) then ---@cast s string[]
+  if require('user_api.check').type_not_empty('table', s) then ---@cast s string[]
     for _, opt in ipairs(s) do
       res[opt] = M.get_opts_tbl(opt, bufnr)
     end
@@ -280,7 +334,7 @@ function M.mv_tbl_values(T, steps, direction)
     direction = { direction, { 'string', 'nil' }, true },
   })
   steps = steps > 0 and steps or 1
-  direction = (direction ~= nil and in_list({ 'l', 'r' }, direction)) and direction or 'r'
+  direction = (direction and in_list({ 'l', 'r' }, direction)) and direction or 'r'
 
   local direction_funcs = { ---@class DirectionFuns
     r = function(t) ---@param t table<string, any>
@@ -338,9 +392,10 @@ function M.strip_fields(T, fields)
     fields = { fields, { 'string', 'number', 'table' } },
   })
 
-  local Value = require('user_api.check.value')
-  if Value.is_str(fields) then ---@cast fields string
-    if not (Value.type_not_empty('string', fields) and Value.fields(fields, T)) then
+  if require('user_api.check').is_str(fields) then ---@cast fields string
+    if
+      not (require('user_api.check').type_not_empty('string', fields) and require('user_api.check').fields(fields, T))
+    then
       return T
     end
     for k, _ in pairs(T) do
@@ -371,8 +426,11 @@ function M.strip_values(T, values, max_instances)
     max_instances = { max_instances, { 'table', 'nil' }, true },
   })
 
-  local Value = require('user_api.check.value')
-  if not (Value.type_not_empty('table', T) or Value.type_not_empty('table', values)) then
+  if
+    not (
+      require('user_api.check').type_not_empty('table', T) or require('user_api.check').type_not_empty('table', values)
+    )
+  then
     error('(user_api.util.strip_values): Empty tables as args!', ERROR)
   end
 
@@ -381,14 +439,14 @@ function M.strip_values(T, values, max_instances)
   for k, v in pairs(T) do
     -- Both arguments can't be true simultaneously
     if M.xor((max_instances == 0), (max_instances ~= 0 and max_instances > count)) then
-      if not in_list(values, v) and Value.is_int(k) then
+      if not in_list(values, v) and require('user_api.check').is_int(k) then
         table.insert(res, v)
       elseif not in_list(values, v) then
         res[k] = v
       else
         count = count + 1
       end
-    elseif Value.is_int(k) then
+    elseif require('user_api.check').is_int(k) then
       table.insert(res, v)
     else
       res[k] = v
@@ -469,17 +527,16 @@ function M.displace_letter(c, direction)
     return 'a'
   end
 
-  local Value = require('user_api.check.value')
   local mv = M.mv_tbl_values
-  local A = vim.deepcopy(M.string.alphabet)
+  local A = vim.deepcopy(require('user_api.util.string').alphabet)
   local LOWER, UPPER = A.lower_map, A.upper_map
   if direction == 'prev' then
-    if Value.fields(c, LOWER) then
+    if require('user_api.check').fields(c, LOWER) then
       return mv(LOWER, 1, 'r')[c]
     end
     return mv(UPPER, 1, 'r')[c]
   end
-  if Value.fields(c, LOWER) then
+  if require('user_api.check').fields(c, LOWER) then
     return mv(LOWER, 1, 'l')[c]
   end
   return mv(UPPER, 1, 'l')[c]
@@ -490,8 +547,12 @@ end
 ---@overload fun(data: string): res: string
 ---@overload fun(data: string[]): res: string[]
 function M.discard_dups(data)
-  local Value = require('user_api.check.value')
-  if not (Value.type_not_empty('string', data) or Value.type_not_empty('table', data)) then
+  if
+    not (
+      require('user_api.check').type_not_empty('string', data)
+      or require('user_api.check').type_not_empty('table', data)
+    )
+  then
     vim.notify('Input is not valid!', ERROR, {
       animate = true,
       hide_from_history = false,
@@ -502,7 +563,7 @@ function M.discard_dups(data)
   end
 
   ---@cast data string
-  if Value.is_str(data) then
+  if require('user_api.check').is_str(data) then
     local res = data:sub(1, 1)
     local i = 2
     while i < data:len() do
@@ -526,8 +587,9 @@ function M.discard_dups(data)
   return res
 end
 
----@param T any[]
----@return any[] reversed
+---@generic T
+---@param T T
+---@return T reversed
 function M.reverse_tbl(T)
   validate({ T = { T, { 'table' } } })
   if vim.tbl_isempty(T) then
@@ -541,5 +603,14 @@ function M.reverse_tbl(T)
   return T
 end
 
-return M
+local Util = setmetatable(M, { ---@type User.Util
+  __index = function(self, k)
+    if require('user_api.check').module('user_api.util.' .. k) then
+      return require('user_api.util.' .. k)
+    end
+    return rawget(self, k) or nil
+  end,
+})
+
+return Util
 -- vim: set ts=2 sts=2 sw=2 et ai si sta:
