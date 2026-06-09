@@ -72,9 +72,8 @@ end
 M.toggleable = M.gen_toggleable(true)
 
 ---@param T User.Opts.Spec
----@param verbose boolean
+---@param verbose? boolean
 ---@return User.Opts.Spec parsed_opts
----@overload fun(T: User.Opts.Spec): parsed_opts: User.Opts.Spec
 function M.long_opts_convert(T, verbose)
   validate({
     T = { T, { 'table' } },
@@ -237,7 +236,7 @@ function M.setup_cmds()
 end
 
 function M.setup_maps()
-  local desc = require('user_api.maps').new_desc
+  local desc = require('user_api.maps').desc
   require('user_api.config.keymaps').set({
     n = {
       ['<leader>UO'] = { group = '+Options' },

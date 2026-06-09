@@ -3,6 +3,7 @@
 ---@field cb function
 
 local validate = require('user_api.check').validate
+local exists = require('user_api.check').module
 
 ---@class User.Pickers.Entry
 ---@field mod string
@@ -25,39 +26,44 @@ function P:new(spec)
   })
 end
 
+local pickers = {} ---@type table<string, User.Pickers.Entry|function>
+
 ---@class User.Pickers
----@field pickers table<string, User.Pickers.Entry|function>
 local M = {}
 
-M.pickers = {}
-
+---@param mod string
 ---@param name string
 ---@param spec User.Pickers.Spec
-function M.new_picker(name, spec)
+function M.new_picker(mod, name, spec)
   validate({
+    mod = { mod, { 'string' } },
     name = { name, { 'string' } },
     spec = { spec, { 'table' } },
     ['spec.mod'] = { spec.mod, { 'string' } },
     ['spec.cb'] = { spec.cb, { 'function' } },
   })
 
-  M.pickers[name] = P:new(spec)
+  if not exists(mod) then
+    return
+  end
+
+  pickers[name] = P:new(spec)
 end
 
 function M.setup()
-  M.new_picker('telescope', {
+  M.new_picker('telescope', 'telescope', {
     mod = 'telescope._extensions.picker_list',
     cb = require('telescope._extensions.picker_list').exports.picker_list,
   })
-  M.new_picker('snacks.nvim', {
+  M.new_picker('snacks', 'snacks.nvim', {
     mod = 'snacks.picker',
     cb = require('snacks.picker').pickers,
   })
-  M.new_picker('fzf-lua', {
+  M.new_picker('fzf-lua', 'fzf-lua', {
     mod = 'fzf-lua.cmd',
     cb = require('fzf-lua.cmd').run_command,
   })
-  M.new_picker('picker.nvim', {
+  M.new_picker('picker', 'picker.nvim', {
     mod = 'picker',
     cb = function()
       require('picker').open({})
@@ -66,20 +72,19 @@ function M.setup()
 end
 
 function M.run()
-  local exists = require('user_api.check.exists').module
-  for name, picker in ipairs(M.pickers) do
+  for name, picker in ipairs(pickers) do
     if not exists(picker.mod) then
-      M.pickers[name] = nil
+      pickers[name] = nil
     end
   end
 
-  local keys = vim.tbl_keys(M.pickers) ---@type string[]
+  local keys = vim.tbl_keys(pickers) --[[@as string[]\]]
   vim.ui.select(keys, { prompt = 'Select The Desired Picker' }, function(item) ---@param item string
     if not (item and vim.list_contains(keys, item)) then
       return
     end
 
-    pcall(M.pickers[item])
+    pcall(pickers[item])
   end)
 end
 

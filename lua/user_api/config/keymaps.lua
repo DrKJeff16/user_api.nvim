@@ -10,7 +10,7 @@ local VIMRC = vim.fs.joinpath(vim.fn.stdpath('config'), 'init.lua')
 local ERROR = vim.log.levels.ERROR
 local WARN = vim.log.levels.WARN
 local INFO = vim.log.levels.INFO
-local desc = require('user_api.maps').new_desc
+local desc = require('user_api.maps').desc
 local ft_get = require('user_api.util').ft_get
 local optget = require('user_api.util').optget
 local validate = require('user_api.check').validate
@@ -129,8 +129,7 @@ local function gen_fun_blank(vertical)
   end
 end
 
----@param force boolean|nil
----@overload fun()
+---@param force? boolean
 local function buf_del(force)
   validate({ force = { force, { 'boolean', 'nil' }, true } })
   if force == nil then
@@ -381,9 +380,8 @@ function M.set_leader(leader, local_leader, force)
 end
 
 ---@param K User.Keymaps.Delete
----@param bufnr integer
+---@param bufnr? integer
 ---@return User.Keymaps.Delete|nil deleted_keys
----@overload fun(K: User.Keymaps.Delete): deleted_keys: User.Keymaps.Delete|nil
 function M.delete(K, bufnr)
   validate({
     K = { K, { 'table' } },
