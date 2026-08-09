@@ -32,10 +32,7 @@ function M.is_distro(distro)
   if not vim.list_contains({ 'termux', 'archlinux' }, distro) then
     return false
   end
-  if distro == 'termux' then
-    return require('user_api.distro.termux').is_distro()
-  end
-  return require('user_api.distro.termux').is_distro()
+  return require('user_api.distro.' .. distro).is_distro() --[[@as boolean]]
 end
 
 local Distro = setmetatable(M, { ---@type User.Distro
@@ -43,7 +40,11 @@ local Distro = setmetatable(M, { ---@type User.Distro
     if require('user_api.check').module('user_api.distro.' .. k) then
       return require('user_api.distro.' .. k)
     end
-    return rawget(self, k) or nil
+    local res = rawget(self, k)
+    if res then
+      return res
+    end
+    require('user_api.backtrace')(vim.log.levels.ERROR, ('Invalid key: `%s`'):format(k))
   end,
 })
 

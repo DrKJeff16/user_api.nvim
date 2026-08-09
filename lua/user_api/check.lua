@@ -1,4 +1,3 @@
-local uv = vim.uv or vim.loop
 local validate = require('user_api.check.exists').validate
 
 ---@param path string
@@ -29,14 +28,14 @@ local M = {}
 --- ---
 ---@return boolean is_root
 function M.is_root()
-  return uv.getuid() == 0
+  return vim.uv.getuid() == 0
 end
 
 ---Check whether Neovim is running in a Windows environment.
 --- ---
 ---@return boolean is_windows
 function M.is_windows()
-  return vim.fn.has('win32') == 1
+  return require('user_api.check.exists').vim_has('win32')
 end
 
 ---@param path string
@@ -58,13 +57,14 @@ end
 ---@return boolean in_console
 function M.in_console()
   --- FIXME: This is not a good enough check. Must find a better solution
-  local env = vim.fn.environ() ---@type table<string, string>
+  local env = vim.fn.environ() --[[@as table<string, string>]]
   return vim.list_contains({ 'linux' }, env.TERM) and not require('user_api.check.value').fields('DISPLAY', env)
 end
 
 local Check = setmetatable(M, { ---@type User.Check
   ---@param self User.Check
   ---@param k integer|string
+  ---@return any value
   __index = function(self, k)
     if require('user_api.check.exists').module('user_api.check.' .. k) then
       return require('user_api.check.' .. k)
@@ -75,7 +75,12 @@ local Check = setmetatable(M, { ---@type User.Check
     if require('user_api.check.exists')[k] then
       return require('user_api.check.exists')[k]
     end
-    return rawget(self, k) or nil
+    local res = rawget(self, k)
+    if res then
+      return res
+    end
+
+    require('user_api.backtrace')(vim.log.levels.ERROR, ('Invalid key: `%s`'):format(k))
   end,
 })
 
