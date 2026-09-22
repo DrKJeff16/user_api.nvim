@@ -1,13 +1,11 @@
-local uv = vim.uv or vim.loop
-
 local timer = nil ---@type uv.uv_timer_t|nil|?
-local group = vim.api.nvim_create_augroup('UserAPI', { clear = true })
 
 local function make_timer()
   if timer and timer:is_active() then
     return
   end
 
+  local uv = vim.uv or vim.loop
   timer = uv.new_timer()
   if not timer then
     return
@@ -38,7 +36,7 @@ local function make_timer()
   )
 
   vim.api.nvim_create_autocmd('VimLeavePre', {
-    group = group,
+    group = vim.api.nvim_create_augroup('UserAPI', { clear = false }),
     once = true,
     callback = function()
       if timer and timer:is_active() then
@@ -98,16 +96,24 @@ function M.setup(commands, verbose)
 
   vim.filetype.add({
     extension = { el = 'lisp', h = 'c', sh = 'bash' },
-    filename = { [vim.fn.expand('~/.spacemacs')] = 'lisp', ['.clangd'] = 'yaml', ['.github/CODEOWNERS'] = 'codeowners' },
+    filename = {
+      ['.clangd'] = 'yaml',
+      ['.github/CODEOWNERS'] = 'codeowners',
+      [vim.fn.expand('~/.spacemacs')] = 'lisp',
+    },
   })
 end
 
 local User = setmetatable(M, { ---@type UserAPI
   __index = function(self, k)
-    if require('user_api.check').module('user_api.' .. k) then
-      return require('user_api.' .. k)
+    local raw = rawget(self, k) or nil
+    if raw then
+      return raw
     end
-    return rawget(self, k) or nil
+
+    if require('user_api.check').module('user_api.' .. k) then
+      return require('user_api.util').rawset(self, k, require('user_api.' .. k))
+    end
   end,
 })
 

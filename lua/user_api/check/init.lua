@@ -8,9 +8,8 @@ local function strip_slash(path, mod)
     path = { path, { 'string' } },
     mod = { mod, { 'string', 'nil' }, true },
   })
-  mod = mod or ':p'
 
-  path = vim.fn.fnamemodify(path, mod)
+  path = vim.fn.fnamemodify(path, mod or ':p')
   while vim.startswith(path:reverse(), '/') do
     path = path:sub(1, path:len() - 1)
   end
@@ -56,8 +55,8 @@ end
 --- ---
 ---@return boolean in_console
 function M.in_console()
-  --- FIXME: This is not a good enough check. Must find a better solution
   local env = vim.fn.environ() --[[@as table<string, string>]]
+  -- FIXME: This is not a good enough check. Must find a better solution
   return vim.list_contains({ 'linux' }, env.TERM) and not require('user_api.check.value').fields('DISPLAY', env)
 end
 
@@ -66,20 +65,20 @@ local Check = setmetatable(M, { ---@type User.Check
   ---@param k integer|string
   ---@return any value
   __index = function(self, k)
-    if require('user_api.check.exists').module('user_api.check.' .. k) then
-      return require('user_api.check.' .. k)
-    end
-    if require('user_api.check.value')[k] then
-      return require('user_api.check.value')[k]
-    end
-    if require('user_api.check.exists')[k] then
-      return require('user_api.check.exists')[k]
-    end
-    local res = rawget(self, k)
-    if res then
-      return res
+    local raw = rawget(self, k) or nil
+    if raw then
+      return raw
     end
 
+    if require('user_api.check.exists').module('user_api.check.' .. k) then
+      return require('user_api.util').rawset(self, k, require('user_api.check.' .. k))
+    end
+    if require('user_api.check.value')[k] then
+      return require('user_api.util').rawset(self, k, require('user_api.check.value')[k])
+    end
+    if require('user_api.check.exists')[k] then
+      return require('user_api.util').rawset(self, k, require('user_api.check.exists')[k])
+    end
     require('user_api.backtrace')(vim.log.levels.ERROR, ('Invalid key: `%s`'):format(k))
   end,
 })

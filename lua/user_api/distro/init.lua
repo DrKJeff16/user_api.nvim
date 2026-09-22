@@ -12,13 +12,15 @@ function M.setup(verbose)
     verbose = false
   end
 
-  if require('user_api.distro.termux').is_distro() then
-    require('user_api.distro.termux').setup()
+  local Termux = require('user_api.distro.termux')
+  local Archlinux = require('user_api.distro.archlinux')
+  if Termux.is_distro() then
+    Termux.setup()
     if verbose then
       vim.notify('Termux distribution detected...', vim.log.levels.INFO)
     end
-  elseif require('user_api.distro.archlinux').is_distro() then
-    require('user_api.distro.archlinux').setup()
+  elseif Archlinux.is_distro() then
+    Archlinux.setup()
     if verbose then
       vim.notify('Arch Linux distribution detected...', vim.log.levels.INFO)
     end
@@ -37,12 +39,13 @@ end
 
 local Distro = setmetatable(M, { ---@type User.Distro
   __index = function(self, k)
-    if require('user_api.check').module('user_api.distro.' .. k) then
-      return require('user_api.distro.' .. k)
+    local raw = rawget(self, k) or nil
+    if raw then
+      return raw
     end
-    local res = rawget(self, k)
-    if res then
-      return res
+
+    if require('user_api.check').module('user_api.distro.' .. k) then
+      return require('user_api.util').rawset(self, k, require('user_api.distro.' .. k))
     end
     require('user_api.backtrace')(vim.log.levels.ERROR, ('Invalid key: `%s`'):format(k))
   end,
