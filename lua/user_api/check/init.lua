@@ -27,7 +27,7 @@ local M = {}
 --- ---
 ---@return boolean is_root
 function M.is_root()
-  return vim.uv.getuid() == 0
+  return (vim.uv or vim.loop).getuid() == 0
 end
 
 ---Check whether Neovim is running in a Windows environment.
