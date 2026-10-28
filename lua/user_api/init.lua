@@ -43,7 +43,7 @@ local function make_timer()
     once = true,
     callback = function()
       if timer and timer:is_active() then
-        timer:stop()
+        assert(timer:stop() ~= nil, 'Unable to stop Neovim logfile cleanup timer')
         timer = nil
       end
     end,
@@ -111,6 +111,8 @@ function M.setup(commands, verbose)
       ['<leader><leader>'] = { M.pickers.run, M.maps.desc('Select Picker') },
     },
   })
+
+  M.util.notify.setup()
 
   make_timer()
 
