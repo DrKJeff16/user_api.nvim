@@ -58,8 +58,9 @@ local function toggle_completer(lead, _, pos)
   return valid
 end
 
----@param short? boolean
+---@param short boolean
 ---@return string[] valid
+---@overload fun(): valid: string[]
 local function gen_toggleable(short)
   validate({ short = { short, { 'boolean', 'nil' }, true } })
   if short == nil then
@@ -87,8 +88,9 @@ end
 toggleable = gen_toggleable(true)
 
 ---@param T User.Opts.Spec
----@param verbose? boolean
+---@param verbose boolean
 ---@return User.Opts.Spec parsed_opts
+---@overload fun(T: User.Opts.Spec): parsed_opts: User.Opts.Spec
 local function long_opts_convert(T, verbose)
   validate({
     T = { T, { 'table' } },
@@ -99,36 +101,30 @@ local function long_opts_convert(T, verbose)
   end
 
   local parsed_opts, msg, verb_msg = {}, '', '' ---@type User.Opts.Spec, string, string
-  if type(T) ~= 'table' or vim.tbl_isempty(T) then
-    if verbose then
-      vim.notify('(user.opts.long_opts_convert): All seems good', INFO)
-    end
-    return parsed_opts
-  end
-
-  local ALL_OPTIONS = vim.deepcopy(M.all_opts)
-  local keys = vim.tbl_keys(ALL_OPTIONS) ---@type string[]
-  table.sort(keys)
-  for opt, val in pairs(T) do
-    if vim.list_contains(keys, opt) then
-      parsed_opts[opt] = val
-    elseif not Check.tbl_values({ opt }, ALL_OPTIONS) then
-      msg = ('%s- Option `%s` not valid!\n'):format(msg, opt) -- If neither long nor short (known) option, append to warning message
-    else
-      local new_opt = Check.tbl_values({ opt }, ALL_OPTIONS, true)
-      if type(new_opt) == 'string' and new_opt ~= '' then
-        parsed_opts[new_opt] = val
-        verb_msg = ('%s%s ==> %s\n'):format(verb_msg, opt, new_opt)
+  if not vim.tbl_isempty(T) then
+    local ALL_OPTIONS = vim.deepcopy(M.all_opts)
+    local keys = vim.tbl_keys(ALL_OPTIONS) --[[@as string[]\]]
+    table.sort(keys)
+    for opt, val in pairs(T) do
+      if vim.list_contains(keys, opt) then
+        parsed_opts[opt] = val
+      elseif not Check.tbl_values({ opt }, ALL_OPTIONS) then
+        msg = ('%s- Option `%s` not valid!\n'):format(msg, opt) -- If neither long nor short (known) option, append to warning message
       else
-        msg = ('%s- Option `%s` non valid!\n'):format(msg, new_opt)
+        local new_opt = Check.tbl_values({ opt }, ALL_OPTIONS, true)
+        if type(new_opt) == 'string' and new_opt ~= '' then
+          parsed_opts[new_opt], verb_msg = val, ('%s%s ==> %s\n'):format(verb_msg, opt, new_opt)
+        else
+          msg = ('%s- Option `%s` non valid!\n'):format(msg, new_opt)
+        end
       end
     end
-  end
 
-  if msg ~= '' then
-    vim.notify(msg, ERROR)
-  elseif verbose and verb_msg ~= '' then
-    vim.notify(verb_msg, INFO)
+    if msg ~= '' then
+      vim.notify(msg, ERROR)
+    elseif verbose and verb_msg ~= '' then
+      vim.notify(verb_msg, INFO)
+    end
   end
   return parsed_opts
 end
@@ -136,7 +132,8 @@ end
 ---Option setter for the aforementioned options dictionary.
 --- ---
 ---@param O User.Opts.Spec A dictionary with keys acting as `vim.o` fields, and values
----@param verbose? boolean Enable verbose printing if `true`
+---@param verbose boolean Enable verbose printing if `true`
+---@overload fun(O: User.Opts.Spec)
 function M.optset(O, verbose)
   validate({
     O = { O, { 'table' } },
@@ -146,18 +143,17 @@ function M.optset(O, verbose)
     verbose = false
   end
 
-  if vim.api.nvim_get_option_value('modifiable', { buf = vim.api.nvim_get_current_buf() }) then
+  if vim.bo[vim.api.nvim_get_current_buf()].modifiable then
     local msg, verb_msg, opts = '', '', long_opts_convert(O, verbose)
     for k, v in pairs(opts) do
-      if type(vim.o[k]) == type(v) then
-        options[k] = v
-        vim.o[k] = options[k]
-        verb_msg = ('%s- %s: %s\n'):format(verb_msg, k, vim.inspect(v))
+      if vim.o[k] ~= nil and type(vim.o[k]) == type(v) then
+        options[k], vim.o[k], verb_msg = v, v, ('%s- %s: %s\n'):format(verb_msg, k, vim.inspect(v))
       end
     end
+
     if msg ~= '' then
       vim.notify(msg, ERROR)
-    elseif verbose then
+    elseif verbose and verb_msg ~= '' then
       vim.notify(verb_msg, INFO)
     end
   end
@@ -185,7 +181,8 @@ local function print_set_opts()
 end
 
 ---@param O string[]|string
----@param verbose? boolean
+---@param verbose boolean
+---@overload fun(O: string[]|string)
 function M.toggle(O, verbose)
   validate({
     O = { O, { 'string', 'table' } },
@@ -214,27 +211,62 @@ end
 
 local function setup_cmds()
   local Commands = require('user_api.commands')
-  Commands.add_command('OptsToggle', function(ctx)
-    local cmds = {}
-    for _, v in ipairs(ctx.fargs) do
-      if not (vim.list_contains(toggleable, v) or ctx.bang) then
-        vim.notify(('(OptsToggle): Cannot toggle option `%s`, aborting'):format(v), ERROR)
-        return
-      end
-      if vim.list_contains(toggleable, v) and not vim.list_contains(cmds, v) then
-        table.insert(cmds, v)
-      end
-    end
-    M.toggle(cmds, ctx.bang)
-  end, Commands.desc('Toggle Vim Options', true, '+', toggle_completer))
-  Commands.add_command('OptsToggleable', function(ctx)
-    toggleable = gen_toggleable(ctx.bang)
-    local msg = ''
-    for i, v in ipairs(toggleable) do
-      msg = ('%s%s%s'):format(msg, i == 1 and '' or '\n', v)
-    end
-    vim.notify(msg)
-  end, Commands.desc('Print all toggleable options', true))
+  Commands.add_command({
+    OptsToggle = {
+      callback = function(ctx)
+        local cmds = {}
+        for _, v in ipairs(ctx.fargs) do
+          assert(
+            vim.list_contains(toggleable, v) or ctx.bang,
+            ('(OptsToggle): Cannot toggle option `%s`, aborting'):format(v)
+          )
+          if vim.list_contains(toggleable, v) and not vim.list_contains(cmds, v) then
+            table.insert(cmds, v)
+          end
+        end
+        M.toggle(cmds, ctx.bang)
+      end,
+      opts = Commands.desc('Toggle Vim Options', true, '+', toggle_completer),
+    },
+    OptsToggleable = {
+      callback = function(ctx)
+        toggleable = gen_toggleable(ctx.bang)
+        local msg = ''
+        for i, v in ipairs(toggleable) do
+          msg = ('%s%s%s'):format(msg, i == 1 and '' or '\n', v)
+        end
+
+        local bufnr = vim.api.nvim_create_buf(true, true)
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, true, vim.split(msg, '\n', { trimempty = true }))
+
+        local tab = vim.api.nvim_open_tabpage(bufnr, true, { after = -1 })
+
+        vim.bo[bufnr].ft = ''
+        vim.bo[bufnr].modified = false
+        vim.bo[bufnr].modifiable = false
+
+        vim.keymap.set('n', 'q', function()
+          vim.cmd.bdelete({ bang = true })
+        end, { buf = bufnr, noremap = true })
+
+        vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
+          group = vim.api.nvim_create_augroup('OptsToggleable', { clear = true }),
+          buffer = bufnr,
+          callback = function()
+            if #vim.api.nvim_list_tabpages() == 1 then
+              return
+            end
+
+            local current_tab = vim.api.nvim_get_current_tabpage()
+            if current_tab == tab then
+              pcall(vim.cmd.tabclose, { bang = true })
+            end
+          end,
+        })
+      end,
+      opts = Commands.desc('Print all toggleable options', true),
+    },
+  })
 end
 
 function M.setup_maps()
@@ -256,7 +288,7 @@ end
 ---@overload fun(override: User.Opts.Spec, verbose: boolean)
 ---@overload fun(override: User.Opts.Spec, verbose: nil, cursor_blink: boolean)
 ---@overload fun(override: nil, verbose: boolean)
----@overload fun(override: nil, verbose: boolean, cursor_blink: boolean)
+---@overload fun(override: nil, verbose: nil, cursor_blink: boolean)
 function M.setup(override, verbose, cursor_blink)
   validate({
     override = { override, { 'table', 'nil' }, true },
